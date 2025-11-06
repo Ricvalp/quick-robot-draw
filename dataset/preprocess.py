@@ -176,9 +176,7 @@ class QuickDrawPreprocessor:
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
-    def _prepare_strokes(
-        self, strokes: Sequence[np.ndarray]
-    ) -> List[np.ndarray]:
+    def _prepare_strokes(self, strokes: Sequence[np.ndarray]) -> List[np.ndarray]:
         """Optionally resample strokes and drop zero-length segments."""
         prepared: List[np.ndarray] = []
         for stroke in strokes:
@@ -293,13 +291,16 @@ class QuickDrawPreprocessor:
         """Derive a stable sample identifier from metadata."""
         if "key_id" in metadata:
             return str(metadata["key_id"])
-        digest = hashlib.md5(json.dumps(metadata, sort_keys=True).encode("utf-8")).hexdigest()
+        digest = hashlib.md5(
+            json.dumps(metadata, sort_keys=True).encode("utf-8")
+        ).hexdigest()
         return digest
 
 
 # --------------------------------------------------------------------------- #
 # Raw data loaders
 # --------------------------------------------------------------------------- #
+
 
 def load_ndjson_sketches(
     path: str,
@@ -387,6 +388,7 @@ def load_binary_sketches(
 # Helper utilities
 # --------------------------------------------------------------------------- #
 
+
 def _infer_family_from_path(path: str) -> str:
     """Infer family/category name from a file path."""
     stem = os.path.basename(path)
@@ -406,18 +408,18 @@ def _unpack_binary_drawing(handle: io.BufferedReader) -> Optional[Dict[str, obje
     header = handle.read(8 + 2 + 1 + 4 + 2)
     if len(header) < 17:
         return None
-    key_id, = struct.unpack("<Q", header[:8])
+    (key_id,) = struct.unpack("<Q", header[:8])
     country_code = struct.unpack("<2s", header[8:10])[0]
     recognized = struct.unpack("<b", header[10:11])[0]
-    timestamp, = struct.unpack("<I", header[11:15])
-    n_strokes, = struct.unpack("<H", header[15:17])
+    (timestamp,) = struct.unpack("<I", header[11:15])
+    (n_strokes,) = struct.unpack("<H", header[15:17])
 
     image: List[Tuple[Sequence[int], Sequence[int]]] = []
     for _ in range(n_strokes):
         n_points_bytes = handle.read(2)
         if len(n_points_bytes) < 2:
             return None
-        n_points, = struct.unpack("<H", n_points_bytes)
+        (n_points,) = struct.unpack("<H", n_points_bytes)
         fmt = f"<{n_points}B"
         xs = struct.unpack(fmt, handle.read(n_points))
         ys = struct.unpack(fmt, handle.read(n_points))

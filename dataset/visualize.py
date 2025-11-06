@@ -14,10 +14,13 @@ from .preprocess import ProcessedSketch
 __all__ = ["plot_sketch", "plot_episode_tokens"]
 
 
-def _reconstruct_absolute_from_tokens(tokens: np.ndarray) -> np.ndarray:
-    """Reconstruct absolute coordinates from (dx, dy) tokens."""
-    absolute = np.cumsum(tokens[:, :2], axis=0)
-    return absolute
+def _reconstruct_absolute_from_tokens(
+    tokens: np.ndarray, mode: str = "delta"
+) -> np.ndarray:
+    """Reconstruct absolute coordinates from tokens."""
+    if mode == "absolute":
+        return tokens[:, :2]
+    return np.cumsum(tokens[:, :2], axis=0)
 
 
 def plot_sketch(
@@ -80,6 +83,7 @@ def plot_episode_tokens(
     show: bool = False,
     color: str = "tab:blue",
     separator_color: str = "tab:red",
+    coordinate_mode: str = "delta",
 ) -> plt.Axes:
     """
     Plot the trajectory encoded by an episode token matrix.
@@ -89,23 +93,25 @@ def plot_episode_tokens(
     if ax is None:
         _, ax = plt.subplots(figsize=(6, 6))
 
-    absolute = _reconstruct_absolute_from_tokens(tokens)
+    absolute = _reconstruct_absolute_from_tokens(tokens, coordinate_mode)
     pen = tokens[:, 2]
 
-    segments = []
-    current = [absolute[0]]
     for idx in range(1, absolute.shape[0]):
-        if pen[idx] < 0.5:
-            if current:
-                segments.append(np.stack(current))
-            current = [absolute[idx]]
+        start = absolute[idx - 1]
+        end = absolute[idx]
+        if pen[idx] >= 0.5:
+            line_color = color
+            linestyle = "-"
         else:
-            current.append(absolute[idx])
-    if current:
-        segments.append(np.stack(current))
-
-    for segment in segments:
-        ax.plot(segment[:, 0], segment[:, 1], color=color, linewidth=1.2)
+            line_color = "tab:red"
+            linestyle = "--"
+        ax.plot(
+            [start[0], end[0]],
+            [start[1], end[1]],
+            color=line_color,
+            linewidth=1.2,
+            linestyle=linestyle,
+        )
 
     sep_indices = np.where(tokens[:, 4] > 0.5)[0]
     reset_indices = np.where(tokens[:, 5] > 0.5)[0]
@@ -126,12 +132,30 @@ def plot_episode_tokens(
         marker="s",
         label="RESET",
     )
+    # Distinguish between global START control tokens and per-sketch START flags.
+    global_start = []
+    sketch_start = []
+    for idx in start_indices:
+        if idx == 0:
+            global_start.append(idx)
+        elif tokens[idx - 1, 6] > 0.5 or tokens[idx - 1, 5] > 0.5:
+            global_start.append(idx)
+        else:
+            sketch_start.append(idx)
+
     ax.scatter(
-        absolute[start_indices, 0],
-        absolute[start_indices, 1],
+        absolute[global_start, 0],
+        absolute[global_start, 1],
         color="tab:green",
         marker="^",
-        label="START",
+        label="GLOBAL START",
+    )
+    ax.scatter(
+        absolute[sketch_start, 0],
+        absolute[sketch_start, 1],
+        color="tab:olive",
+        marker="s",
+        label="SKETCH START",
     )
     ax.scatter(
         absolute[stop_indices, 0],

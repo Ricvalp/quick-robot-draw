@@ -5,6 +5,7 @@ PyTorch dataset utilities for loading QuickDraw K-shot episodes.
 from __future__ import annotations
 
 import os
+import warnings
 from typing import Dict, Iterable, List, Optional
 
 import numpy as np
@@ -14,7 +15,7 @@ from torch.utils.data import Dataset, get_worker_info
 from .episode_builder import EpisodeBuilder
 from .storage import DatasetManifest, SketchStorage, StorageConfig
 
-__all__ = ["QuickDrawEpisodes", "quickdraw_collate_fn"]
+__all__ = ["QuickDrawEpisodes", "QuickDrawEpisodesAbsolute", "quickdraw_collate_fn"]
 
 
 class QuickDrawEpisodes(Dataset):
@@ -29,12 +30,16 @@ class QuickDrawEpisodes(Dataset):
         Dataset split (train/val/test).
     K : int
         Number of prompt examples per episode.
-    max_seq_len : int
-        Maximum allowed number of tokens per episode (guard).
+        max_seq_len : Optional[int]
+            Maximum allowed number of tokens per episode. When provided,
+            the loader will resample episodes until the limit is met (with
+            a warning) or fail after several attempts.
     backend : str
         Storage backend to use. Should match preprocessing stage.
     augment : bool
         Whether to apply online augmentations during sampling.
+    coordinate_mode : str
+        `"delta"` (default) for motion deltas or `"absolute"` for absolute positions.
     storage_config : Optional[StorageConfig]
         Optional explicit storage configuration. When omitted, a default is
         derived from arguments.
@@ -50,12 +55,13 @@ class QuickDrawEpisodes(Dataset):
         *,
         split: str = "train",
         K: int = 5,
-        max_seq_len: int = 512,
+        max_seq_len: Optional[int] = 512,
         backend: str = "lmdb",
         augment: bool = True,
         storage_config: Optional[StorageConfig] = None,
         seed: int = 0,
         augment_config: Optional[Dict[str, object]] = None,
+        coordinate_mode: str = "delta",
     ) -> None:
         self.root = root
         self.split = split
@@ -63,6 +69,7 @@ class QuickDrawEpisodes(Dataset):
         self.max_seq_len = max_seq_len
         self.augment = augment
         self.seed = seed
+        self.coordinate_mode = coordinate_mode
 
         manifest_path = os.path.join(root, "DatasetManifest.json")
         if not os.path.exists(manifest_path):
@@ -98,10 +105,22 @@ class QuickDrawEpisodes(Dataset):
             max_seq_len=self.max_seq_len,
             seed=seed,
             augment_config=augment_config,
+            coordinate_mode=self.coordinate_mode,
         )
 
+        self.retry_on_overflow = self.max_seq_len is not None
+        self.max_retry_attempts = 8
+        if self.retry_on_overflow:
+            warnings.warn(
+                f"QuickDrawEpisodes will resample episodes until they fit "
+                f"max_seq_len={self.max_seq_len} (up to {self.max_retry_attempts} attempts).",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
         self._episode_space = sum(
-            max(0, len(samples) - self.k_shot) for samples in self.family_to_samples.values()
+            max(0, len(samples) - self.k_shot)
+            for samples in self.family_to_samples.values()
         )
         if self._episode_space == 0:
             self._episode_space = len(self.family_ids)
@@ -120,11 +139,29 @@ class QuickDrawEpisodes(Dataset):
         """
         worker = get_worker_info()
         if worker is None:
-            seed = (self.seed + index) % (2**32)
+            base_seed = (self.seed + index) % (2**32)
         else:
-            seed = (self.seed + worker.id * 10_000 + index) % (2**32)
-        rng = np.random.RandomState(seed)
-        episode = self.builder.build_episode(augment=self.augment, rng=rng)
+            base_seed = (self.seed + worker.id * 10_000 + index) % (2**32)
+
+        attempts = self.max_retry_attempts if self.retry_on_overflow else 1
+        episode = None
+        last_exc: Optional[Exception] = None
+        for attempt in range(attempts):
+            rng_seed = (base_seed + attempt * 9773) % (2**32)
+            rng = np.random.RandomState(rng_seed)
+            try:
+                episode = self.builder.build_episode(augment=self.augment, rng=rng)
+                break
+            except ValueError as exc:
+                if not self.retry_on_overflow or "Episode length" not in str(exc):
+                    raise
+                last_exc = exc
+                continue
+        if episode is None:
+            raise RuntimeError(
+                f"Unable to sample an episode ≤ {self.max_seq_len} tokens after "
+                f"{attempts} attempts."
+            ) from last_exc
         tokens = torch.from_numpy(episode.tokens.astype(np.float32, copy=False))
         return {
             "tokens": tokens,
@@ -146,7 +183,9 @@ class QuickDrawEpisodes(Dataset):
         """
         split_map = self.manifest.config.get("family_split_map")
         if split_map:
-            return [fam for fam in family_ids if split_map.get(fam, "train") == self.split]
+            return [
+                fam for fam in family_ids if split_map.get(fam, "train") == self.split
+            ]
         return family_ids
 
     def close(self) -> None:
@@ -155,6 +194,14 @@ class QuickDrawEpisodes(Dataset):
         Explicit closure is useful when loaders are short-lived CLI tools.
         """
         self.sketch_storage.close()
+
+
+class QuickDrawEpisodesAbsolute(QuickDrawEpisodes):
+    """QuickDrawEpisodes variant that emits absolute coordinates instead of deltas."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs.setdefault("coordinate_mode", "absolute")
+        super().__init__(*args, **kwargs)
 
 
 def quickdraw_collate_fn(batch: List[Dict[str, object]]) -> Dict[str, object]:

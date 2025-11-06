@@ -58,6 +58,8 @@ augmentations:          # applied online during episode sampling
 storage:
   compression: "zstd"
   shards: 64
+max_sketches_per_file: null  # cap sketches pulled from each raw file
+families: null               # optionally whitelist specific categories
 ```
 
 Adjust `raw_root`/`root` to match your filesystem. If you only want a subset, place just those files under `raw_root` or run with `--max-files` to cap the build pass.
@@ -117,7 +119,7 @@ Per-token metadata (family IDs, prompt/query IDs, lengths) accompanies every epi
 ## 6. Loading episodes in PyTorch
 
 ```python
-from dataset.loader import QuickDrawEpisodes, quickdraw_collate_fn
+from dataset.loader import QuickDrawEpisodes, QuickDrawEpisodesAbsolute, quickdraw_collate_fn
 
 dataset = QuickDrawEpisodes(
     root="data/",
@@ -137,7 +139,36 @@ for batch in loader:
     # feed tokens/mask to transformer, diffusion policy, or SSM
 ```
 
+Need absolute positions instead of deltas? Use the convenience subclass:
+
+```python
+dataset = QuickDrawEpisodesAbsolute(root="data/", split="train", K=5)
+```
+
+or pass `coordinate_mode="absolute"` to `QuickDrawEpisodes`.
+
 `QuickDrawEpisodes` assembles episodes lazily from cached sketches, applying deterministic per-worker seeds and optional online augmentations (rotation/scale/translation/jitter). The provided `collate_fn` pads sequences and emits masks for turnkey batching.
+
+#### Diffusion-ready batches
+
+Diffusion transformers that observe the prompts plus the first `S` query tokens and denoise the next `H` tokens can use the `DiffusionCollator` wrapper:
+
+```python
+from dataset.loader import QuickDrawEpisodes
+from dataset.diffusion import DiffusionCollator
+from torch.utils.data import DataLoader
+
+episodes = QuickDrawEpisodes(root="data/", split="train", K=5)
+collator = DiffusionCollator(horizon=64)  # randomly samples S per episode
+loader = DataLoader(episodes, batch_size=16, collate_fn=collator)
+
+batch = next(iter(loader))
+tokens = batch["tokens"]              # padded episode tokens
+context_mask = batch["context_mask"]  # prompt + observed query tokens
+target_mask = batch["target_mask"]    # denoised segment (length ≤ H)
+```
+
+The collator uniformly samples how many query tokens to reveal before denoising, anywhere between `0` and the largest value that still leaves `H` tokens for diffusion. Batch dictionaries now include `observed_query_tokens`, `context_mask`, and `target_mask` while preserving all fields from `quickdraw_collate_fn`.
 
 ---
 

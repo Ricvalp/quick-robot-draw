@@ -38,6 +38,12 @@ def parse_args() -> argparse.Namespace:
         help="Directory to store generated figures (set empty to disable saving).",
     )
     parser.add_argument(
+        "--coordinate-mode",
+        choices=["delta", "absolute"],
+        default="delta",
+        help="Which coordinate representation to visualize.",
+    )
+    parser.add_argument(
         "--no-show",
         action="store_true",
         help="Disable interactive display; only save figures.",
@@ -60,16 +66,21 @@ def main() -> None:
         max_seq_len=args.max_seq_len,
         augment=False,
         seed=args.seed,
+        coordinate_mode=args.coordinate_mode,
     )
     episode = dataset[args.index]
 
-    storage = SketchStorage(StorageConfig(root=args.root, backend=args.backend), mode="r")
+    storage = SketchStorage(
+        StorageConfig(root=args.root, backend=args.backend), mode="r"
+    )
     family_id: str = episode["family_id"]
     prompt_ids: List[str] = episode["prompt_ids"]
     query_id: str = episode["query_id"]
 
     tokens = episode["tokens"].numpy()
-    token_ax = plot_episode_tokens(tokens, show=False)
+    token_ax = plot_episode_tokens(
+        tokens, show=False, coordinate_mode=args.coordinate_mode
+    )
     token_fig = token_ax.figure
 
     num_prompts = len(prompt_ids)

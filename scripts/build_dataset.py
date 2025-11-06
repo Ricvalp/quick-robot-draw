@@ -139,16 +139,49 @@ def load_config(path: str) -> Dict[str, object]:
         return yaml.safe_load(handle)
 
 
-def discover_raw_files(root: str, limit: Optional[int] = None) -> List[str]:
+def _normalize_families_filter(value) -> Optional[List[str]]:
+    """Normalize user-provided family filters into a lowercase list."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        items = [token.strip() for token in value.split(",")]
+    elif isinstance(value, (list, tuple, set)):
+        items = [str(token).strip() for token in value]
+    else:
+        raise ValueError("families filter must be a list or comma-separated string.")
+    normalized = [item for item in items if item]
+    return [item.lower() for item in normalized] or None
+
+
+def _family_from_path(path: str) -> str:
+    """Infer the QuickDraw family name from a raw filename."""
+    name = os.path.basename(path)
+    for suffix in (".ndjson", ".bin"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    return name
+
+
+def discover_raw_files(
+    root: str,
+    limit: Optional[int] = None,
+    allowed_families: Optional[List[str]] = None,
+) -> List[str]:
     """Recursively collect `.ndjson`/`.bin` files under `root`, respecting an optional cap.
 
     The returned list is lexicographically sorted to keep builds deterministic.
     """
     raw_files: List[str] = []
+    allowed: Optional[set] = set(allowed_families) if allowed_families else None
     for dirpath, _, filenames in os.walk(root):
         for name in sorted(filenames):
             if name.endswith(".ndjson") or name.endswith(".bin"):
-                raw_files.append(os.path.join(dirpath, name))
+                path = os.path.join(dirpath, name)
+                family_name = _family_from_path(path).lower()
+                if allowed and family_name not in allowed:
+                    continue
+                raw_files.append(path)
                 if limit is not None and len(raw_files) >= limit:
                     return raw_files
     return raw_files
@@ -199,6 +232,8 @@ def preprocess_dataset(
     storage: SketchStorage,
     preprocessor_kwargs: Dict[str, object],
     num_workers: int,
+    max_sketches_per_file: Optional[int],
+    seed: int,
 ) -> Dict[str, object]:
     """
     Preprocess all sketches and store them in the provided storage backend.
@@ -219,9 +254,14 @@ def preprocess_dataset(
             initializer=_worker_init,
             initargs=worker_args,
         )
+        payload_iter = iterate_raw_payloads(
+            raw_files,
+            max_sketches_per_file=max_sketches_per_file,
+            seed=seed,
+        )
         preprocess_iter = executor.map(
             _worker_preprocess,
-            iterate_raw_payloads(raw_files),
+            payload_iter,
             chunksize=8,
         )
         iterator = preprocess_iter
@@ -229,7 +269,11 @@ def preprocess_dataset(
         preprocessor = QuickDrawPreprocessor(**preprocessor_kwargs)
 
         def sequential_iterator() -> Iterator[Optional[ProcessedSketch]]:
-            for raw in iterate_raw_sketches(raw_files):
+            for raw in iterate_raw_sketches(
+                raw_files,
+                max_sketches_per_file=max_sketches_per_file,
+                seed=seed,
+            ):
                 processed = preprocessor.preprocess(raw)
                 yield processed
 
@@ -276,26 +320,66 @@ def preprocess_dataset(
     }
 
 
-def iterate_raw_sketches(raw_files: Iterable[str]) -> Iterator[RawSketch]:
+def iterate_raw_sketches(
+    raw_files: Iterable[str],
+    max_sketches_per_file: Optional[int],
+    seed: int,
+) -> Iterator[RawSketch]:
     """Yield RawSketch objects from a list of ndjson/bin files.
 
     Each generator instance walks the files sequentially to preserve ordering.
     """
+    base_rng = np.random.RandomState(seed)
     for path in raw_files:
-        loader = (
-            load_ndjson_sketches(path)
-            if path.endswith(".ndjson")
-            else load_binary_sketches(path)
-        )
+        file_seed = int(base_rng.randint(0, 2**32 - 1))
+        file_rng = np.random.RandomState(file_seed)
+        yield from _load_sketches_from_file(path, max_sketches_per_file, file_rng)
+
+
+def _load_sketches_from_file(
+    path: str,
+    max_sketches_per_file: Optional[int],
+    rng: np.random.RandomState,
+) -> Iterator[RawSketch]:
+    """Load sketches from `path`, optionally sampling at most `max_sketches_per_file`."""
+    loader = (
+        load_ndjson_sketches(path)
+        if path.endswith(".ndjson")
+        else load_binary_sketches(path)
+    )
+    if max_sketches_per_file is None or max_sketches_per_file <= 0:
         yield from loader
+        return
+
+    reservoir: List[RawSketch] = []
+    for idx, sketch in enumerate(loader):
+        if len(reservoir) < max_sketches_per_file:
+            reservoir.append(sketch)
+        else:
+            j = rng.randint(0, idx + 1)
+            if j < max_sketches_per_file:
+                reservoir[j] = sketch
+    if not reservoir:
+        return
+    order = rng.permutation(len(reservoir))
+    for pos in order:
+        yield reservoir[int(pos)]
 
 
-def iterate_raw_payloads(raw_files: Iterable[str]) -> Iterator[Dict[str, object]]:
+def iterate_raw_payloads(
+    raw_files: Iterable[str],
+    max_sketches_per_file: Optional[int],
+    seed: int,
+) -> Iterator[Dict[str, object]]:
     """Yield serialisable payloads for multiprocessing from raw sketch files.
 
     This avoids sharing numpy arrays through pickling, which can be slow.
     """
-    for raw in iterate_raw_sketches(raw_files):
+    for raw in iterate_raw_sketches(
+        raw_files,
+        max_sketches_per_file=max_sketches_per_file,
+        seed=seed,
+    ):
         yield _raw_to_payload(raw)
 
 
@@ -373,7 +457,9 @@ def prebuild_episodes(
     progress = tqdm(iterator, desc="Episodes", unit="episode") if tqdm else iterator
     stored = 0
     for idx in progress:
-        episode = builder.build_episode(augment=False, rng=np.random.RandomState(rng.randint(0, 2**32)))
+        episode = builder.build_episode(
+            augment=False, rng=np.random.RandomState(rng.randint(0, 2**32))
+        )
         episode_storage.put(episode)
         stored += 1
 
@@ -420,7 +506,13 @@ def main() -> None:
             f"Raw data root '{raw_root}' does not exist. Update config."
         )
 
-    raw_files = discover_raw_files(raw_root, limit=args.max_files)
+    family_filter = _normalize_families_filter(config.get("families"))
+
+    raw_files = discover_raw_files(
+        raw_root,
+        limit=args.max_files,
+        allowed_families=family_filter,
+    )
     if not raw_files:
         raise RuntimeError(f"No .ndjson or .bin files found under '{raw_root}'.")
 
@@ -434,11 +526,17 @@ def main() -> None:
     }
 
     sketch_storage = SketchStorage(storage_config, mode="w")
+    max_sketches_per_file = config.get("max_sketches_per_file")
+    if max_sketches_per_file is not None:
+        max_sketches_per_file = int(max_sketches_per_file)
+
     summary = preprocess_dataset(
         raw_files=raw_files,
         storage=sketch_storage,
         preprocessor_kwargs=preprocessor_kwargs,
         num_workers=args.num_workers,
+        max_sketches_per_file=max_sketches_per_file,
+        seed=int(config.get("seed", 0)),
     )
     sketch_storage.close()
 

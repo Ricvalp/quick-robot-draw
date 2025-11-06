@@ -31,7 +31,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def verify_sketch_storage(storage: SketchStorage, manifest: DatasetManifest) -> Dict[str, int]:
+def verify_sketch_storage(
+    storage: SketchStorage, manifest: DatasetManifest
+) -> Dict[str, int]:
     """Ensure cached sketches match manifest counts and basic sanity checks.
 
     Returns a dictionary of families whose counts deviate from the manifest.
@@ -109,14 +111,18 @@ def main() -> None:
     print("Loaded manifest:")
     print(manifest.to_dict())
 
-    storage = SketchStorage(StorageConfig(root=args.root, backend=args.backend), mode="r")
+    storage = SketchStorage(
+        StorageConfig(root=args.root, backend=args.backend), mode="r"
+    )
     discrepancies = verify_sketch_storage(storage, manifest)
     storage.close()
 
     if discrepancies:
         print("Warning: Sketch count discrepancies detected:")
         for family, actual in discrepancies.items():
-            print(f"  {family}: manifest={manifest.sketch_counts[family]}, actual={actual}")
+            print(
+                f"  {family}: manifest={manifest.sketch_counts[family]}, actual={actual}"
+            )
     else:
         print("Sketch storage verified.")
 

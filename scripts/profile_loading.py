@@ -19,7 +19,9 @@ def parse_args() -> argparse.Namespace:
     The resulting namespace feeds directly into the profiling routine.
     """
     parser = argparse.ArgumentParser(description="Profile QuickDraw data loading.")
-    parser.add_argument("--root", required=True, help="Processed dataset root directory.")
+    parser.add_argument(
+        "--root", required=True, help="Processed dataset root directory."
+    )
     parser.add_argument("--split", default="train")
     parser.add_argument("--backend", default="lmdb")
     parser.add_argument("--K", type=int, default=5)
@@ -28,7 +30,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--steps", type=int, default=100)
     parser.add_argument("--max-seq-len", type=int, default=512)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--augment", action="store_true", help="Enable online augmentations.")
+    parser.add_argument(
+        "--augment", action="store_true", help="Enable online augmentations."
+    )
     return parser.parse_args()
 
 

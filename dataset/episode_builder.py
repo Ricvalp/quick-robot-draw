@@ -53,6 +53,9 @@ class EpisodeBuilder:
         Seed for the internal random state, ensuring reproducibility.
     augment_config : Optional[dict]
         Configuration controlling geometric augmentations.
+    coordinate_mode : str
+        Either `"delta"` (default) or `"absolute"`, controlling whether
+        token coordinates use successive differences or absolute positions.
     dtype : np.dtype
         dtype for the generated token matrix.
     """
@@ -68,6 +71,7 @@ class EpisodeBuilder:
         seed: Optional[int] = None,
         augment_config: Optional[Dict[str, object]] = None,
         dtype=np.float32,
+        coordinate_mode: str = "delta",
     ) -> None:
         self.fetch_family = fetch_family
         self.fetch_sketch = fetch_sketch
@@ -78,6 +82,12 @@ class EpisodeBuilder:
         self.random = np.random.RandomState(seed)
         self.augment_config = self._resolve_augment_config(augment_config or {})
         self.token_dim = 7  # dx, dy, pen, start, sep, reset, stop
+        self.coordinate_mode = coordinate_mode.lower()
+        if self.coordinate_mode not in {"delta", "absolute"}:
+            raise ValueError(
+                f"Unsupported coordinate_mode '{coordinate_mode}'. "
+                "Expected 'delta' or 'absolute'."
+            )
 
         self.special_tokens = {
             "start": self._special_token(start=1.0),
@@ -141,6 +151,7 @@ class EpisodeBuilder:
             "family_id": resolved_family,
             "k_shot": self.k_shot,
             "length": total_len,
+            **self._compute_episode_markers(episode_tokens, query_sketch.length),
         }
         return Episode(
             episode_id=episode_id,
@@ -211,7 +222,10 @@ class EpisodeBuilder:
         by `_compose_tokens`.
         """
         tokens = np.zeros((sketch.length, self.token_dim), dtype=self.dtype)
-        tokens[:, 0:2] = sketch.deltas
+        if self.coordinate_mode == "delta":
+            tokens[:, 0:2] = sketch.deltas
+        else:
+            tokens[:, 0:2] = sketch.absolute
         tokens[:, 2] = sketch.pen
         tokens[0, 3] = 1.0  # mark new sketch start
         return tokens
@@ -275,7 +289,9 @@ class EpisodeBuilder:
         )
 
     @staticmethod
-    def _resolve_augment_config(config: Dict[str, object]) -> Dict[str, Dict[str, object]]:
+    def _resolve_augment_config(
+        config: Dict[str, object],
+    ) -> Dict[str, Dict[str, object]]:
         """Merge user-provided augmentation configuration with defaults."""
         default = {
             "rotation": {"enabled": True, "range": (-math.pi, math.pi)},
@@ -289,3 +305,33 @@ class EpisodeBuilder:
             merged[key] = {**params, **user}
             merged[key]["enabled"] = bool(merged[key].get("enabled", params["enabled"]))
         return merged
+
+    def _compute_episode_markers(
+        self, tokens: np.ndarray, query_length: int
+    ) -> Dict[str, int]:
+        """Return indices for reset, query start, and stop tokens."""
+        result: Dict[str, int] = {}
+        reset_indices = np.where(tokens[:, 5] > 0.5)[0]
+        if reset_indices.size > 0:
+            result["reset_index"] = int(reset_indices[0])
+        start_indices = np.where(tokens[:, 3] > 0.5)[0]
+        query_start_special = None
+        if start_indices.size > 0 and "reset_index" in result:
+            larger = start_indices[start_indices > result["reset_index"]]
+            if larger.size > 0:
+                query_start_special = int(larger[0])
+                result["query_start_special_index"] = query_start_special
+        stop_indices = np.where(tokens[:, 6] > 0.5)[0]
+        if stop_indices.size > 0:
+            result["stop_index"] = int(stop_indices[0])
+        if query_start_special is not None:
+            result["query_start_index"] = query_start_special + 1
+            if "stop_index" in result:
+                result["query_length"] = (
+                    result["stop_index"] - result["query_start_index"]
+                )
+            else:
+                result["query_length"] = query_length
+        else:
+            result["query_length"] = query_length
+        return result

@@ -382,6 +382,7 @@ class _HDF5Backend(_BaseBackend):
 
         Nested groups are traversed recursively to emulate a hierarchical store.
         """
+
         def recurse(group, current_path=""):
             for name, item in group.items():
                 path = f"{current_path}/{name}"
@@ -546,9 +547,13 @@ class SketchStorage:
         backend = config.backend.lower()
         path = config.sketch_path()
         if backend == "lmdb":
-            backend_obj = _LMDBBackend(path, readonly=readonly, map_size=config.map_size_bytes)
+            backend_obj = _LMDBBackend(
+                path, readonly=readonly, map_size=config.map_size_bytes
+            )
         elif backend == "hdf5":
-            backend_obj = _HDF5Backend(os.path.join(path, "sketches.h5"), readonly=readonly)
+            backend_obj = _HDF5Backend(
+                os.path.join(path, "sketches.h5"), readonly=readonly
+            )
         elif backend == "webdataset":
             backend_obj = _WebDatasetBackend(
                 path,
@@ -617,9 +622,13 @@ class EpisodeStorage:
         backend = config.backend.lower()
         path = config.episode_path()
         if backend == "lmdb":
-            backend_obj = _LMDBBackend(path, readonly=readonly, map_size=config.map_size_bytes)
+            backend_obj = _LMDBBackend(
+                path, readonly=readonly, map_size=config.map_size_bytes
+            )
         elif backend == "hdf5":
-            backend_obj = _HDF5Backend(os.path.join(path, "episodes.h5"), readonly=readonly)
+            backend_obj = _HDF5Backend(
+                os.path.join(path, "episodes.h5"), readonly=readonly
+            )
         elif backend == "webdataset":
             backend_obj = _WebDatasetBackend(
                 path,

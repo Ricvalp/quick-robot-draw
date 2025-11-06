@@ -2,3 +2,6 @@ data/
 figures/
 raw/
 PROMPT.md
+
+*.pyc
+*__pycache__/

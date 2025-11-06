@@ -1,0 +1,27 @@
+root: "data/"
+raw_root: "raw/"
+backend: "lmdb"  # one of: lmdb, webdataset, hdf5
+num_prompts: 5
+max_seq_len: 512
+normalize: true
+resample:
+  points: null
+  spacing: null
+augmentations:
+  rotation: true
+  scale: true
+  translation: true
+  jitter: false
+storage:
+  compression: "zstd"
+  shards: 64
+cache:
+  sketches_subdir: "processed_sketches"
+  episodes_subdir: "episodes"
+seed: 1234
+split:
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+num_prebuilt_episodes: 0
+rebuild: false

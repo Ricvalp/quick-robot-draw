@@ -4,7 +4,7 @@
 
 ---
 
-## Why this exists
+## The Dataset
 
 - **Consistent geometry:** every sketch is centered, scaled into `[-1, 1]^2`, and available as both absolute points and cumulative deltas.
 - **Episode-aware:** episodes follow the structure `[START, prompt₁, SEP, …, RESET, START, query, STOP]` with binary control channels (pen, start, sep, reset, stop) so transformers and diffusion models can consume a single token stream.
@@ -18,7 +18,7 @@
 - Python 3.9+
 - `pip install numpy torch lmdb h5py msgpack PyYAML tqdm matplotlib`
   - Install the appropriate PyTorch wheel for your platform/CUDA setup via [pytorch.org](https://pytorch.org/get-started/locally/).
-- `gsutil` (optional but recommended) for downloading the raw QuickDraw release.
+- `gsutil` for downloading the raw QuickDraw release.
 
 ---
 
@@ -94,6 +94,10 @@ Each episode contains `K` prompt sketches and one query sketch sampled from the 
 [START, prompt₁, SEP, prompt₂, SEP, …, promptK, SEP, RESET,
  START, query, STOP]
 ```
+
+![Example Sketches](example_sketches.png)
+
+![Episode Tokens](example_tokens.png)
 
 Tokens are float vectors of width 7:
 

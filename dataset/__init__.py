@@ -21,7 +21,7 @@ from .storage import (
     EpisodeStorage,
 )
 from .loader import QuickDrawEpisodes, QuickDrawEpisodesAbsolute, quickdraw_collate_fn
-from .diffusion import DiffusionCollator, DiffusionCollatorConfig
+from .diffusion import DiffusionCollator
 from . import visualize
 
 __all__ = [
@@ -40,6 +40,5 @@ __all__ = [
     "QuickDrawEpisodesAbsolute",
     "quickdraw_collate_fn",
     "DiffusionCollator",
-    "DiffusionCollatorConfig",
     "visualize",
 ]

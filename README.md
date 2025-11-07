@@ -151,15 +151,15 @@ or pass `coordinate_mode="absolute"` to `QuickDrawEpisodes`.
 
 #### Diffusion-ready batches
 
-Diffusion transformers that observe the prompts plus the first `S` query tokens and denoise the next `H` tokens can use the `DiffusionCollator` wrapper:
+Diffusion transformers that observe the prompts plus the first `S` query tokens and denoise the next `H` tokens can use the `CollateDiffusionInContext` wrapper:
 
 ```python
 from dataset.loader import QuickDrawEpisodes
-from dataset.diffusion import DiffusionCollator
+from dataset.diffusion import CollateDiffusionInContext
 from torch.utils.data import DataLoader
 
 episodes = QuickDrawEpisodes(root="data/", split="train", K=5)
-collator = DiffusionCollator(horizon=64)  # randomly samples S per episode
+collator = CollateDiffusionInContext(horizon=64)  # randomly samples S per episode
 loader = DataLoader(episodes, batch_size=16, collate_fn=collator)
 
 batch = next(iter(loader))
@@ -169,6 +169,16 @@ target_mask = batch["target_mask"]    # denoised segment (length ≤ H)
 ```
 
 The collator uniformly samples how many query tokens to reveal before denoising, anywhere between `0` and the largest value that still leaves `H` tokens for diffusion. Batch dictionaries now include `observed_query_tokens`, `context_mask`, and `target_mask` while preserving all fields from `quickdraw_collate_fn`.
+
+For unconditional sketch generation (no prompt context), use the new `DiffusionCollator`, which treats the entire sketch history as context and provides only the horizon chunk as the diffusion target.
+
+To launch end-to-end training with the DiT diffusion policy implementation in `diffusion_policy/`, run:
+
+```
+PYTHONPATH=. python diffusion_policy/train_quickdraw.py --data-root data/ --horizon 64
+```
+
+The script wraps `QuickDrawEpisodes` into the fixed-width tensors required by `DiTDiffusionPolicy` and trains using a simple AdamW loop.
 
 ---
 

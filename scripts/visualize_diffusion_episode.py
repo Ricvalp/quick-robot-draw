@@ -102,9 +102,10 @@ def main() -> None:
         label="Target",
     )
     ax.legend(loc="best")
+    context_len = int(context_mask.sum())
+    target_len = int(target_mask.sum())
     ax.set_title(
-        f"Diffusion episode — observed={int(batch['context_lengths'][0])}, "
-        f"target={int(batch['target_lengths'][0])}"
+        f"Diffusion episode — observed={context_len}, target={target_len}"
     )
 
     if args.save_dir:

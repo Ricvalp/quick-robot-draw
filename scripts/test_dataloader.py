@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--K", type=int, default=5, help="Number of prompts.")
     parser.add_argument("--max-seq-len", type=int, default=512, help="Sequence limit.")
     parser.add_argument("--seed", type=int, default=0, help="Base random seed.")
+    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for DataLoader.")
     return parser.parse_args()
 
 
@@ -49,7 +50,7 @@ def main() -> None:
     )
 
     loader = DataLoader(
-        dataset, batch_size=32,
+        dataset, batch_size=args.batch_size,
         collate_fn=DiffusionCollator(horizon=5),
         # collate_fn=quickdraw_collate_fn,
         shuffle=True

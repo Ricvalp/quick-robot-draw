@@ -39,7 +39,25 @@
                 "--split", "train",
                 "--backend", "lmdb",
                 "--K", "5",
-                "--max-seq-len", "1024"
+                "--max-seq-len", "1024",
+                "--batch-size", "8"
+            ]
+        },
+        {
+            "name": "Train QuickDraw Diffusion",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "diffusion_policy/train_quickdraw.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "."
+            },
+            "args": [
+                "--data-root", "data/",
+                "--horizon", "16",
+                "--num-workers", "0",
+                "--wandb-project", "quickdraw-diffusion"
             ]
         }
     ]

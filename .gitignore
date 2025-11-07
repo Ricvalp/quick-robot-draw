@@ -2,6 +2,7 @@ data/
 figures/
 raw/
 PROMPT.md
-
+wandb/
+artifacts/
 *.pyc
 *__pycache__/

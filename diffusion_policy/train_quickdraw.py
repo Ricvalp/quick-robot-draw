@@ -15,6 +15,7 @@ from tqdm.auto import tqdm
 import wandb
 
 from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
+from diffusion_policy.sampling import make_start_token, sample_quickdraw_tokens, tokens_to_figure
 from dataset.loader import QuickDrawEpisodes
 from dataset.diffusion import DiffusionCollator
 
@@ -27,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--K", type=int, default=5, help="Number of prompts per episode.")
     parser.add_argument("--horizon", type=int, default=64, help="Prediction horizon.")
     parser.add_argument("--batch-size", type=int, default=32, help="Mini-batch size.")
-    parser.add_argument("--epochs", type=int, default=20, help="Training epochs.")
+    parser.add_argument("--epochs", type=int, default=100, help="Training epochs.")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
     parser.add_argument("--weight-decay", type=float, default=0.0, help="AdamW weight decay.")
     parser.add_argument("--num-workers", type=int, default=4, help="Dataloader worker count.")
@@ -49,6 +50,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wandb-project", type=str, default=None, help="Optional Weights & Biases project name.")
     parser.add_argument("--wandb-run", type=str, default=None, help="Optional W&B run name.")
     parser.add_argument("--wandb-entity", type=str, default=None, help="Optional W&B entity/team.")
+    parser.add_argument("--loss-log-every", type=int, default=200, help="Steps between logging batch loss to W&B.")
+    parser.add_argument("--eval-samples", type=int, default=4, help="Number of sketches to sample per epoch for qualitative monitoring.")
+    parser.add_argument("--eval-tokens", type=int, default=256, help="Tokens to generate per qualitative sample.")
+    parser.add_argument("--eval-interval", type=int, default=1, help="Epoch interval for qualitative sampling (set >1 to reduce frequency).")
+    parser.add_argument("--eval-sample-seed", type=int, default=42, help="Base seed for qualitative sampling noise.")
     return parser.parse_args()
 
 
@@ -126,6 +132,44 @@ def build_policy_inputs(
     }
 
 
+def _log_qualitative_samples(policy: DiTDiffusionPolicy, args: argparse.Namespace, epoch: int, device: torch.device) -> None:
+    """Sample sketches and push them to WandB for quick visual inspection."""
+
+    if args.wandb_project is None or args.eval_samples <= 0:
+        return
+    if (epoch + 1) % max(1, args.eval_interval) != 0:
+        return
+
+    prev_mode = policy.training
+    policy.eval()
+
+    generator = torch.Generator(device=device)
+    generator.manual_seed(args.eval_sample_seed + epoch)
+
+    start = make_start_token(args.eval_samples, policy.cfg.point_feature_dim, device)
+    samples = sample_quickdraw_tokens(
+        policy,
+        args.eval_tokens,
+        start_token=start,
+        generator=generator,
+    )
+
+    import matplotlib.pyplot as plt
+
+    images = []
+    batch = samples.shape[0]
+    for idx in range(batch):
+        fig = tokens_to_figure(samples[idx], coordinate_mode="absolute")
+        images.append(wandb.Image(fig, caption=f"epoch {epoch + 1} sample {idx}"))
+        plt.close(fig)
+
+    if images:
+        wandb.log({"samples/sketches": images}, step=epoch + 1)
+
+    if prev_mode:
+        policy.train()
+
+
 def main() -> None:
     args = parse_args()
     set_seed(args.seed)
@@ -176,7 +220,7 @@ def main() -> None:
     policy = DiTDiffusionPolicy(policy_cfg).to(device)
     optimizer = torch.optim.AdamW(policy.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-    save_dir = Path(args.save_dir)
+    save_dir = Path(args.checkpoint_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
     if args.wandb_project:
@@ -196,6 +240,8 @@ def main() -> None:
         total_params = sum(p.numel() for p in policy.parameters())
         print(f"Model parameter count: {total_params:,}")
 
+    global_step = 0
+
     for epoch in range(args.epochs):
         policy.train()
         running_loss = 0.0
@@ -212,9 +258,18 @@ def main() -> None:
             torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
             optimizer.step()
 
+            global_step += 1
+
             running_loss += float(loss.detach().cpu())
             total_batches += 1
             progress.set_postfix({"mse": metrics["mse"]})
+
+            if (
+                args.wandb_project
+                and args.loss_log_every > 0
+                and global_step % args.loss_log_every == 0
+            ):
+                wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
 
         if total_batches == 0:
             raise RuntimeError("No valid batches processed; consider reducing the horizon or batch size.")
@@ -233,6 +288,8 @@ def main() -> None:
             },
             checkpoint_path,
         )
+
+        _log_qualitative_samples(policy, args, epoch, device)
 
     if args.wandb_project:
         wandb.finish()

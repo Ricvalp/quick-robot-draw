@@ -16,19 +16,8 @@ storage:
   compression: "zstd"
   shards: 64
 families:
-  - ant
-  - angel
-  - bat
-  - banana
   - basketball
-  - alarm clock
-  - apple
-  - airplane
-  - cat
-  - chair
-  - car
-  - cloud
-max_sketches_per_file: 100
+max_sketches_per_file: 30000
 cache:
   sketches_subdir: "processed_sketches"
   episodes_subdir: "episodes"

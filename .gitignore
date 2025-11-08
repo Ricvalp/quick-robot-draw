@@ -4,5 +4,8 @@ raw/
 PROMPT.md
 wandb/
 artifacts/
+checkpoints/
+samples/
+
 *.pyc
 *__pycache__/

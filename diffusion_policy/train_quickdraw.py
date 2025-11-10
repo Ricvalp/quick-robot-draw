@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--K", type=int, default=5, help="Number of prompts per episode.")
     parser.add_argument("--horizon", type=int, default=64, help="Prediction horizon.")
     parser.add_argument("--batch-size", type=int, default=32, help="Mini-batch size.")
-    parser.add_argument("--epochs", type=int, default=100, help="Training epochs.")
+    parser.add_argument("--epochs", type=int, default=200, help="Training epochs.")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
     parser.add_argument("--weight-decay", type=float, default=0.0, help="AdamW weight decay.")
     parser.add_argument("--num-workers", type=int, default=4, help="Dataloader worker count.")

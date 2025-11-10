@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from io import BytesIO
 from typing import Optional
 
 import numpy as np
@@ -12,6 +13,7 @@ __all__ = [
     "make_start_token",
     "sample_quickdraw_tokens",
     "tokens_to_figure",
+    "tokens_to_gif",
 ]
 
 
@@ -111,3 +113,89 @@ def tokens_to_figure(
     ax.axis("off")
     fig.tight_layout()
     return fig
+
+
+def tokens_to_gif(
+    tokens: torch.Tensor | np.ndarray,
+    *,
+    coordinate_mode: str = "absolute",
+    color: str = "black",
+    pen_up_color: str = "tab:red",
+    linewidth: float = 1.5,
+    interval_ms: int = 80,
+    loop: int = 0,
+    output_path: Optional[str] = None,
+) -> bytes:
+    """Render an animated GIF showing the drawing unfolding token by token."""
+
+    import matplotlib.pyplot as plt  # defer import to keep CLI light
+    from PIL import Image
+
+    array = tokens.detach().cpu().numpy() if isinstance(tokens, torch.Tensor) else np.asarray(tokens)
+    if array.ndim != 2 or array.shape[1] < 3:
+        raise ValueError("tokens must have shape (N, 3).")
+
+    coords = array[:, :2].copy()
+    if coordinate_mode == "delta":
+        coords = np.cumsum(coords, axis=0)
+    elif coordinate_mode != "absolute":
+        raise ValueError(f"Unsupported coordinate_mode '{coordinate_mode}'.")
+
+    pen_state = array[:, 2]
+
+    def _figure_to_rgb(current_fig):
+        canvas = current_fig.canvas
+        canvas.draw()
+        width, height = canvas.get_width_height()
+        data = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
+        return data.reshape(height, width, 4)[..., :3].copy()
+
+    frames: list[Image.Image] = []
+    num_points = coords.shape[0]
+    steps = max(2, num_points)
+
+    for step in range(1, steps):
+        fig, ax = plt.subplots(figsize=(4, 4), dpi=150)
+        for idx in range(1, min(step + 1, num_points)):
+            start = coords[idx - 1]
+            end = coords[idx]
+            active = pen_state[idx] >= 0.5
+            ax.plot(
+                [start[0], end[0]],
+                [start[1], end[1]],
+                color=color if active else pen_up_color,
+                linewidth=linewidth,
+                linestyle="-" if active else "--",
+            )
+        ax.set_aspect("equal")
+        ax.invert_yaxis()
+        ax.axis("off")
+        fig.tight_layout()
+        frame = _figure_to_rgb(fig)
+        frames.append(Image.fromarray(frame))
+        plt.close(fig)
+
+    if not frames:
+        fig = tokens_to_figure(tokens, coordinate_mode=coordinate_mode, color=color, linewidth=linewidth)
+        frame = _figure_to_rgb(fig)
+        frames.append(Image.fromarray(frame))
+        plt.close(fig)
+
+    buffer = BytesIO()
+    frames[0].save(
+        buffer,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        duration=max(1, interval_ms),
+        loop=max(0, loop),
+        disposal=2,
+    )
+    data = buffer.getvalue()
+    if output_path is not None:
+        with open(output_path, "wb") as handle:
+            handle.write(data)
+    buffer.close()
+    for frame in frames:
+        frame.close()
+    return data

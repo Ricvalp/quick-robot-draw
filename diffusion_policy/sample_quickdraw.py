@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion_policy.sampling import make_start_token, sample_quickdraw_tokens, tokens_to_figure
+from diffusion_policy.sampling import make_start_token, sample_quickdraw_tokens, tokens_to_figure, tokens_to_gif
 
 try:  # PyTorch 2.6+ defaults to weights_only=True and blocks custom globals.
     from torch.serialization import add_safe_globals
@@ -81,6 +81,8 @@ def main() -> None:
             fig.savefig(path, dpi=200, bbox_inches="tight")
             print(f"Saved {path}")
         figures.append(fig)
+        gif_path = output_dir / f"{args.prefix}_{idx:03d}.gif" if output_dir is not None else None
+        tokens_to_gif(sample, coordinate_mode=args.coordinate_mode, output_path=str(gif_path) if gif_path else None)
 
     if args.show:
         for fig in figures:

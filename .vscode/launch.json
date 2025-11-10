@@ -59,6 +59,22 @@
                 "--num-workers", "0",
                 "--wandb-project", "quickdraw-diffusion"
             ]
+        },
+                {
+            "name": "Train QuickDraw LSTM",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "lstm/train_quickdraw.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "."
+            },
+            "args": [
+                "--data-root", "data/",
+                "--num-workers", "0",
+                // "--wandb-project", "quickdraw-diffusion"
+            ]
         }
     ]
 }

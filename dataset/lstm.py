@@ -25,16 +25,11 @@ class LSTMCollator:
         self,
         *,
         max_seq_len: Optional[int] = 300,
-        coordinate_mode: str = "delta",
         pad_value: float = 0.0,
     ) -> None:
         if max_seq_len is not None and max_seq_len < 2:
             raise ValueError("max_seq_len must be >= 2 when provided.")
-        coord = coordinate_mode.lower()
-        if coord not in {"delta", "absolute"}:
-            raise ValueError("coordinate_mode must be 'delta' or 'absolute'.")
         self.max_seq_len = max_seq_len
-        self.coordinate_mode = coord
         self.pad_value = pad_value
 
     def __call__(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:

@@ -76,16 +76,16 @@ class SketchRNN(nn.Module):
         dec_dropout = cfg.dropout if cfg.decoder_num_layers > 1 else 0.0
 
         self.encoder = nn.LSTM(
-            cfg.input_dim,
-            cfg.encoder_hidden_size,
+            input_size=cfg.input_dim,
+            hidden_size=cfg.encoder_hidden_size,
             num_layers=cfg.encoder_num_layers,
             bidirectional=True,
             batch_first=True,
             dropout=enc_dropout,
         )
         self.decoder = nn.LSTM(
-            cfg.input_dim + cfg.latent_dim,
-            cfg.decoder_hidden_size,
+            input_size=cfg.input_dim + cfg.latent_dim,
+            hidden_size=cfg.decoder_hidden_size,
             num_layers=cfg.decoder_num_layers,
             batch_first=True,
             dropout=dec_dropout,

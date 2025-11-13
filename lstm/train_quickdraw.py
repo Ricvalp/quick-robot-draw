@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", type=str, default="train", help="Dataset split.")
     parser.add_argument("--backend", type=str, default="lmdb", help="Storage backend.")
     parser.add_argument("--K", type=int, default=5, help="Number of prompt sketches per episode.")
-    parser.add_argument("--batch-size", type=int, default=128, help="Mini-batch size.")
+    parser.add_argument("--batch-size", type=int, default=16, help="Mini-batch size.")
     parser.add_argument("--epochs", type=int, default=200, help="Training epochs.")
     parser.add_argument("--lr", type=float, default=1e-3, help="Adam learning rate.")
     parser.add_argument("--weight-decay", type=float, default=0.0, help="Adam weight decay.")
@@ -116,7 +116,7 @@ def main() -> None:
         seed=args.seed,
         coordinate_mode=args.coordinate_mode,
     )
-    collator = LSTMCollator(max_seq_len=args.max_seq_len, coordinate_mode=args.coordinate_mode)
+    collator = LSTMCollator(max_seq_len=args.max_seq_len)
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,

@@ -25,11 +25,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", type=str, default="train", help="Dataset split.")
     parser.add_argument("--backend", type=str, default="lmdb", help="Storage backend.")
     parser.add_argument("--K", type=int, default=5, help="Number of prompt sketches per episode.")
-    parser.add_argument("--batch-size", type=int, default=16, help="Mini-batch size.")
+    parser.add_argument("--batch-size", type=int, default=64, help="Mini-batch size.")
     parser.add_argument("--epochs", type=int, default=200, help="Training epochs.")
     parser.add_argument("--lr", type=float, default=1e-3, help="Adam learning rate.")
     parser.add_argument("--weight-decay", type=float, default=0.0, help="Adam weight decay.")
-    parser.add_argument("--num-workers", type=int, default=4, help="DataLoader worker count.")
+    parser.add_argument("--num-workers", type=int, default=16, help="DataLoader worker count.")
     parser.add_argument("--device", type=str, default="cuda", help="Training device.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed.")
     parser.add_argument("--max-seq-len", type=int, default=512, help="Max sequence length (incl. EOS).")
@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--kl-end", type=float, default=1.0, help="Final KL weight.")
     parser.add_argument("--kl-anneal-steps", type=int, default=10000, help="Linear KL anneal steps.")
     parser.add_argument("--grad-clip", type=float, default=1.0, help="Gradient clipping norm.")
-    parser.add_argument("--checkpoint-dir", type=str, default="checkpoints_lstm", help="Directory for checkpoints.")
+    parser.add_argument("--checkpoint-dir", type=str, default="lstm/checkpoints", help="Directory for checkpoints.")
     parser.add_argument("--wandb-project", type=str, default=None, help="Optional Weights & Biases project.")
     parser.add_argument("--wandb-run", type=str, default=None, help="Weights & Biases run name.")
     parser.add_argument("--wandb-entity", type=str, default=None, help="Weights & Biases entity/team.")
@@ -56,6 +56,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-temperature", type=float, default=0.65, help="Sampling temperature.")
     parser.add_argument("--eval-seed", type=int, default=42, help="Seed used for qualitative sampling.")
     parser.add_argument("--greedy-eval", action="store_true", help="Use greedy sampling for eval sketches.")
+    parser.add_argument("--profile", action="store_true", help="Enable PyTorch profiling and save trace.")
+    parser.add_argument("--trace-dir", type=str, default="profiling/lstm/", help="Directory to save profiling trace.")
     return parser.parse_args()
 
 
@@ -117,14 +119,17 @@ def main() -> None:
         coordinate_mode=args.coordinate_mode,
     )
     collator = LSTMCollator(max_seq_len=args.max_seq_len)
+    
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        pin_memory=True,
+        # pin_memory=True,
         drop_last=True,
         collate_fn=collator,
+        # prefetch_factor=4,
+        # persistent_workers=True,
     )
 
     cfg = SketchRNNConfig(
@@ -145,6 +150,35 @@ def main() -> None:
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Model parameter count: {total_params:,}")
+    
+    if args.profile:
+        from torch.profiler import profile, ProfilerActivity
+        import os
+        
+        os.makedirs(args.trace_dir, exist_ok=True)
+        
+        activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA]
+
+        with profile(activities=activities) as prof:
+
+            for step, batch in enumerate(dataloader):
+                strokes = batch["strokes"].to(device)
+                lengths = batch["lengths"].to(device)
+
+                optimizer.zero_grad(set_to_none=True)
+                kl_weight = compute_kl_weight(step, args)
+                loss, metrics = model.compute_loss(strokes, lengths, kl_weight=kl_weight)
+                if not torch.isfinite(loss):
+                    continue
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.grad_clip)
+                optimizer.step()
+                
+                if step > 3:
+                    break
+        prof.export_chrome_trace(args.trace_dir + f"lstm_trace.json")
+        print(f"Saved profiling trace to {args.trace_dir}lstm_trace.json")
+        return
 
     if args.wandb_project:
         wandb.init(
@@ -199,7 +233,7 @@ def main() -> None:
         print(f"Epoch {epoch + 1}: avg loss {avg_loss:.6f}")
 
         if args.wandb_project:
-            wandb.log({"train/loss": avg_loss, "epoch": epoch + 1}, step=epoch + 1)
+            wandb.log({"train/loss": avg_loss, "epoch": epoch + 1})
 
         checkpoint_path = save_dir / f"sketchrnn_epoch_{epoch + 1:03d}.pt"
         torch.save(

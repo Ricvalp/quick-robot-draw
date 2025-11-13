@@ -7,6 +7,14 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 import torch
+from torch.utils.data import DataLoader
+
+import webdataset as wds
+import torch
+import os
+from glob import glob
+import io
+import tqdm
 
 __all__ = ["LSTMCollator"]
 
@@ -87,6 +95,8 @@ class LSTMCollator:
                 if end_idx <= tokens.shape[0]:
                     return tokens[start_idx:end_idx].clone()
 
+        
+        print("WARNING: Falling back to automatic query extraction. Never tested!!!")
         reset_idx = self._first_index(tokens[:, 5])
         if reset_idx is None:
             return None
@@ -109,13 +119,8 @@ class LSTMCollator:
 
     def _tokens_to_strokes(self, tokens: torch.Tensor) -> torch.Tensor:
         coords = tokens[:, :2].to(dtype=torch.float32)
-        if self.coordinate_mode == "absolute":
-            deltas = torch.zeros_like(coords)
-            deltas[0] = coords[0]
-            if coords.shape[0] > 1:
-                deltas[1:] = coords[1:] - coords[:-1]
-        else:
-            deltas = coords.clone()
+
+        deltas = coords.clone()
 
         pen = tokens[:, 2].to(dtype=torch.float32)
         stroke_end = torch.zeros_like(pen, dtype=torch.bool)
@@ -142,3 +147,69 @@ class LSTMCollator:
         row = torch.zeros(1, 5, device=device, dtype=dtype)
         row[0, -1] = 1.0
         return row
+
+
+def write_shards(raw_dataset, collate_fn, out_dir, shard_size=5000):
+    """
+    raw_dataset: returns raw samples
+    collate_fn: your batch collator (used here with batch size 1)
+    """
+
+    os.makedirs(out_dir, exist_ok=True)
+    sink = wds.ShardWriter(f"{out_dir}/shard-%06d.tar", maxcount=shard_size)
+
+    for i in tqdm.tqdm(range(len(raw_dataset))):
+        raw = raw_dataset[i]
+
+        # Process one sample via the collator
+        processed = collate_fn([raw])   # returns dict with batch dim = 1
+
+        key = f"{i:08d}"
+        wds_sample = {"__key__": key}
+
+        # Save strokes
+        buf = io.BytesIO()
+        torch.save(processed["strokes"], buf)
+        wds_sample["strokes.pt"] = buf.getvalue()
+
+        # Save lengths
+        buf = io.BytesIO()
+        torch.save(processed["lengths"], buf)
+        wds_sample["lengths.pt"] = buf.getvalue()
+
+        sink.write(wds_sample)
+
+    sink.close()
+
+def bytes_to_tensor(sample):
+    """Convert WebDataset bytes fields into torch tensors."""
+    return {
+        "strokes": torch.load(io.BytesIO(sample[0])),
+        "lengths": torch.load(io.BytesIO(sample[1])),
+    }
+
+def cached_collate(samples):
+    # samples is a list of dicts, each with:
+    # strokes: [1, T, C]
+    # lengths: [1]
+
+    strokes = torch.cat([s["strokes"] for s in samples], dim=0)   # [B, T, C]
+    lengths = torch.cat([s["lengths"] for s in samples], dim=0)   # [B]
+
+    return {"strokes": strokes, "lengths": lengths}
+
+def get_cached_loader(shard_glob, batch_size, num_workers=4):
+    shards = sorted(glob(shard_glob))
+    print(shards)
+    dataset = (
+        wds.WebDataset(shards)
+           .to_tuple("strokes.pt", "lengths.pt")
+           .map(bytes_to_tensor)
+    )
+    
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        collate_fn=cached_collate,
+    )

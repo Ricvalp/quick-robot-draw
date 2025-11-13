@@ -6,6 +6,6 @@ wandb/
 artifacts/
 checkpoints*
 samples/
-
+profiling/
 *.pyc
 *__pycache__/

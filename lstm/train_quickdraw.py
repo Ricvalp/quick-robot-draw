@@ -41,11 +41,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--latent-dim", type=int, default=128, help="Latent vector dimension.")
     parser.add_argument("--num-mixtures", type=int, default=20, help="Number of GMM components.")
     parser.add_argument("--dropout", type=float, default=0.0, help="Dropout for encoder/decoder stacks.")
-    parser.add_argument("--kl-start", type=float, default=0.01, help="Initial KL weight.")
+    parser.add_argument("--kl-start", type=float, default=0.1, help="Initial KL weight.")
     parser.add_argument("--kl-end", type=float, default=1.0, help="Final KL weight.")
-    parser.add_argument("--kl-anneal-steps", type=int, default=10000, help="Linear KL anneal steps.")
+    parser.add_argument("--kl-anneal-steps", type=int, default=20000, help="Linear KL anneal steps.")
     parser.add_argument("--grad-clip", type=float, default=1.0, help="Gradient clipping norm.")
     parser.add_argument("--checkpoint-dir", type=str, default="lstm/checkpoints", help="Directory for checkpoints.")
+    parser.add_argument("--save-interval", type=int, default=10, help="Epoch interval between saving checkpoints.")
     parser.add_argument("--wandb-project", type=str, default=None, help="Optional Weights & Biases project.")
     parser.add_argument("--wandb-run", type=str, default=None, help="Weights & Biases run name.")
     parser.add_argument("--wandb-entity", type=str, default=None, help="Weights & Biases entity/team.")
@@ -74,14 +75,12 @@ def compute_kl_weight(step: int, args: argparse.Namespace) -> float:
     return args.kl_start + (args.kl_end - args.kl_start) * progress
 
 
-def _log_eval_samples(model: SketchRNN, args: argparse.Namespace, epoch: int, device: torch.device) -> None:
+def _log_eval_samples(model: SketchRNN, args: argparse.Namespace, step: int, device: torch.device) -> None:
     if args.wandb_project is None or args.eval_samples <= 0:
-        return
-    if (epoch + 1) % max(1, args.eval_interval) != 0:
         return
 
     generator = torch.Generator(device=device)
-    generator.manual_seed(args.eval_seed + epoch)
+    generator.manual_seed(args.eval_seed + step)
     samples = model.sample(
         args.eval_steps,
         num_samples=args.eval_samples,
@@ -97,10 +96,10 @@ def _log_eval_samples(model: SketchRNN, args: argparse.Namespace, epoch: int, de
     for idx, seq in enumerate(trimmed):
         tokens = strokes_to_tokens(seq)
         fig = tokens_to_figure(tokens, coordinate_mode="delta")
-        images.append(wandb.Image(fig, caption=f"epoch {epoch + 1} sample {idx}"))
+        images.append(wandb.Image(fig, caption=f"step {step + 1} sample {idx}"))
         plt.close(fig)
     if images:
-        wandb.log({"samples/sketches": images}, step=epoch + 1)
+        wandb.log({"samples/sketches": images}, step=step + 1)
 
 
 def main() -> None:
@@ -125,11 +124,11 @@ def main() -> None:
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        # pin_memory=True,
+        pin_memory=True,
         drop_last=True,
         collate_fn=collator,
-        # prefetch_factor=4,
-        # persistent_workers=True,
+        prefetch_factor=4,
+        persistent_workers=True,
     )
 
     cfg = SketchRNNConfig(
@@ -162,8 +161,8 @@ def main() -> None:
         with profile(activities=activities) as prof:
 
             for step, batch in enumerate(dataloader):
-                strokes = batch["strokes"].to(device)
-                lengths = batch["lengths"].to(device)
+                strokes = batch["strokes"].to(device, non_blocking=True)
+                lengths = batch["lengths"].to(device, non_blocking=True)
 
                 optimizer.zero_grad(set_to_none=True)
                 kl_weight = compute_kl_weight(step, args)
@@ -235,18 +234,20 @@ def main() -> None:
         if args.wandb_project:
             wandb.log({"train/loss": avg_loss, "epoch": epoch + 1})
 
-        checkpoint_path = save_dir / f"sketchrnn_epoch_{epoch + 1:03d}.pt"
-        torch.save(
-            {
-                "epoch": epoch + 1,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "config": cfg,
-            },
-            checkpoint_path,
-        )
+        if args.save_interval is not None and (epoch + 1) % max(1, args.save_interval) == 0:
+            checkpoint_path = save_dir / f"sketchrnn_epoch_{epoch + 1:03d}.pt"
+            torch.save(
+                {
+                    "epoch": epoch + 1,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "config": cfg,
+                },
+                checkpoint_path,
+            )
 
-        _log_eval_samples(model, args, epoch, device)
+        if args.eval_interval is not None and global_step % max(1, args.eval_interval) == 0:
+            _log_eval_samples(model, args, global_step, device)
 
     if args.wandb_project:
         wandb.finish()

@@ -69,6 +69,7 @@ class QuickDrawEpisodes(Dataset):
         self.max_seq_len = max_seq_len
         self.augment = augment
         self.seed = seed
+        self.augment_config = augment_config
         self.coordinate_mode = coordinate_mode
 
         manifest_path = os.path.join(root, "DatasetManifest.json")
@@ -82,31 +83,37 @@ class QuickDrawEpisodes(Dataset):
             storage_config = StorageConfig(root=root, backend=backend)
         self.storage_config = storage_config
 
-        self.sketch_storage = SketchStorage(storage_config, mode="r")
-        all_families = self.sketch_storage.families()
+        tmp_sketch_storage = SketchStorage(storage_config, mode="r")
+        all_families = tmp_sketch_storage.families()
         self.family_to_samples: Dict[str, List[str]] = {}
 
         assigned_families = self._resolve_split_families(all_families)
         for family in assigned_families:
-            samples = self.sketch_storage.samples_for_family(family)
+            samples = tmp_sketch_storage.samples_for_family(family)
             if len(samples) > 0:
                 self.family_to_samples[family] = samples
-
+                
+        tmp_sketch_storage.close()
+        
         self.family_ids = sorted(self.family_to_samples.keys())
         if not self.family_ids:
             raise RuntimeError(f"No sketches found for split '{split}'.")
 
         self.base_rng = np.random.RandomState(seed)
-        self.builder = EpisodeBuilder(
-            fetch_family=lambda fam: self.family_to_samples[fam],
-            fetch_sketch=self.sketch_storage.get,
-            family_ids=self.family_ids,
-            k_shot=self.k_shot,
-            max_seq_len=self.max_seq_len,
-            seed=seed,
-            augment_config=augment_config,
-            coordinate_mode=self.coordinate_mode,
-        )
+        # self.builder = EpisodeBuilder(
+        #     fetch_family=lambda fam: self.family_to_samples[fam],
+        #     fetch_sketch=self.sketch_storage.get,
+        #     family_ids=self.family_ids,
+        #     k_shot=self.k_shot,
+        #     max_seq_len=self.max_seq_len,
+        #     seed=seed,
+        #     augment_config=augment_config,
+        #     coordinate_mode=self.coordinate_mode,
+        # )
+        
+        self.sketch_storage = None
+        self.builder = None
+        self._worker_pid = None
 
         self.retry_on_overflow = self.max_seq_len is not None
         self.max_retry_attempts = 8
@@ -124,6 +131,14 @@ class QuickDrawEpisodes(Dataset):
         )
         if self._episode_space == 0:
             self._episode_space = len(self.family_ids)
+    
+    def __getstate__(self):
+        """Customize pickling to avoid non-fork-safe resources."""
+        state = self.__dict__.copy()
+        state["sketch_storage"] = None
+        state["builder"] = None
+        state["_worker_pid"] = None
+        return state
 
     def __len__(self) -> int:
         """Return the nominal number of unique episode samples.
@@ -137,6 +152,9 @@ class QuickDrawEpisodes(Dataset):
 
         Deterministic seeds derived from `index` keep behaviour stable per epoch.
         """
+        
+        self._ensure_worker_state() # Initialize SketchStorage and EpisodeBuilder per worker
+        
         worker = get_worker_info()
         if worker is None:
             base_seed = (self.seed + index) % (2**32)
@@ -193,7 +211,36 @@ class QuickDrawEpisodes(Dataset):
 
         Explicit closure is useful when loaders are short-lived CLI tools.
         """
-        self.sketch_storage.close()
+        if self.sketch_storage is not None:
+            self.sketch_storage.close()
+    
+    def _ensure_worker_state(self) -> None:
+        """Ensure per-worker state is initialized for multi-process loading.
+        
+        Necessary because SketchStorage and EpisodeBuilder are not fork-safe.
+        """
+        pid = os.getpid()
+        if self.builder is not None and self._worker_pid == pid:
+            return
+        if self.sketch_storage is not None:
+            self.sketch_storage.close()
+        self.sketch_storage = SketchStorage(self.storage_config, mode="r")
+        self.builder = EpisodeBuilder(
+            fetch_family=self._fetch_family,
+            fetch_sketch=self.sketch_storage.get,
+            family_ids=self.family_ids,
+            k_shot=self.k_shot,
+            max_seq_len=self.max_seq_len,
+            seed=self.seed,
+            augment_config=self.augment_config,
+            coordinate_mode=self.coordinate_mode,
+        )
+        self._worker_pid = pid
+    
+    def _fetch_family(self, family_id: str) -> List[str]:
+        return self.family_to_samples[family_id]
+
+
 
 
 class QuickDrawEpisodesAbsolute(QuickDrawEpisodes):

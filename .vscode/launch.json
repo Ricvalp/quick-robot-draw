@@ -72,7 +72,7 @@
             },
             "args": [
                 "--data-root", "data/",
-                "--num-workers", "0",
+                "--num-workers", "1",
                 // "--wandb-project", "quickdraw-diffusion"
             ]
         }

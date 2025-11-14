@@ -15,9 +15,9 @@ augmentations:
 storage:
   compression: "zstd"
   shards: 64
-families:
-  - cat
-max_sketches_per_file: 50000
+# families:
+#   - alarm clock
+max_sketches_per_file: 10000
 cache:
   sketches_subdir: "processed_sketches"
   episodes_subdir: "episodes"

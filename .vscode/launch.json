@@ -5,6 +5,24 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Build Images Dataset",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "scripts/build_images_dataset.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "."
+            },
+            "args": [
+                "--config", "config/data_config.yaml",
+                "--output-root", "data/imgs",
+                "--img-size", "64",
+                "--line-width", "1.6",
+                "--num-workers", "8"
+            ]
+        },
+        {
             "name": "Visualize Episode",
             "type": "debugpy",
             "request": "launch",

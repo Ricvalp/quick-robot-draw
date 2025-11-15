@@ -2,6 +2,11 @@ import torch
 import torch.nn as nn
 from torchvision.models import resnet18
 
+__all__ = [
+    "ResNet18FeatureExtractor",
+]
+
+
 class ResNet18FeatureExtractor(nn.Module):
     def __init__(self):
         super(self).__init__()

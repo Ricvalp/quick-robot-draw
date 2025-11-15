@@ -15,7 +15,7 @@ from torch.utils.data import Dataset, get_worker_info
 from .episode_builder import EpisodeBuilder
 from .storage import DatasetManifest, SketchStorage, StorageConfig
 
-__all__ = ["QuickDrawEpisodes", "QuickDrawEpisodesAbsolute", "quickdraw_collate_fn"]
+__all__ = ["QuickDrawEpisodes"]
 
 
 class QuickDrawEpisodes(Dataset):
@@ -100,16 +100,6 @@ class QuickDrawEpisodes(Dataset):
             raise RuntimeError(f"No sketches found for split '{split}'.")
 
         self.base_rng = np.random.RandomState(seed)
-        # self.builder = EpisodeBuilder(
-        #     fetch_family=lambda fam: self.family_to_samples[fam],
-        #     fetch_sketch=self.sketch_storage.get,
-        #     family_ids=self.family_ids,
-        #     k_shot=self.k_shot,
-        #     max_seq_len=self.max_seq_len,
-        #     seed=seed,
-        #     augment_config=augment_config,
-        #     coordinate_mode=self.coordinate_mode,
-        # )
         
         self.sketch_storage = None
         self.builder = None
@@ -239,56 +229,3 @@ class QuickDrawEpisodes(Dataset):
     
     def _fetch_family(self, family_id: str) -> List[str]:
         return self.family_to_samples[family_id]
-
-
-
-
-class QuickDrawEpisodesAbsolute(QuickDrawEpisodes):
-    """QuickDrawEpisodes variant that emits absolute coordinates instead of deltas."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        kwargs.setdefault("coordinate_mode", "absolute")
-        super().__init__(*args, **kwargs)
-
-
-def quickdraw_collate_fn(batch: List[Dict[str, object]]) -> Dict[str, object]:
-    """
-    Collate function for DataLoader batching.
-
-    Pads token sequences to the maximum length within the batch and returns
-    masks describing valid timesteps.
-    """
-    if not batch:
-        raise ValueError("Empty batch encountered in collate function.")
-
-    max_len = max(item["tokens"].shape[0] for item in batch)
-    token_dim = batch[0]["tokens"].shape[1]
-    batch_size = len(batch)
-
-    tokens = torch.zeros(batch_size, max_len, token_dim, dtype=batch[0]["tokens"].dtype)
-    mask = torch.zeros(batch_size, max_len, dtype=torch.bool)
-    lengths = torch.zeros(batch_size, dtype=torch.long)
-    family_ids: List[str] = []
-    prompt_ids: List[List[str]] = []
-    query_ids: List[str] = []
-    metadata: List[Dict[str, object]] = []
-
-    for idx, item in enumerate(batch):
-        length = item["tokens"].shape[0]
-        tokens[idx, :length] = item["tokens"]
-        mask[idx, :length] = True
-        lengths[idx] = length
-        family_ids.append(item["family_id"])
-        prompt_ids.append(list(item["prompt_ids"]))
-        query_ids.append(item["query_id"])
-        metadata.append(item["metadata"])
-
-    return {
-        "tokens": tokens,
-        "mask": mask,
-        "lengths": lengths,
-        "family_id": family_ids,
-        "prompt_ids": prompt_ids,
-        "query_id": query_ids,
-        "metadata": metadata,
-    }

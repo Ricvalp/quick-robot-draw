@@ -11,7 +11,7 @@ from .preprocess import ProcessedSketch
 
 try:  # Pillow is optional until rasterisation is used.
     from PIL import Image, ImageDraw
-except ImportError:  # pragma: no cover - dependency optional
+except ImportError:
     Image = None
     ImageDraw = None
 
@@ -58,8 +58,7 @@ def _map_to_canvas(points: np.ndarray, size: int) -> np.ndarray:
     return np.clip(scale, 0.0, size - 1)
 
 
-# mypy / type checkers should know about ImageDraw; avoid runtime attr access when Pillow missing.
-if TYPE_CHECKING:  # pragma: no cover - hints only
+if TYPE_CHECKING:
     from PIL import ImageDraw as _PILImageDraw
 
 

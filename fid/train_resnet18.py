@@ -74,42 +74,39 @@ def main(_):
                         "train/accuracy": (outputs.argmax(dim=1) == labels).float().mean().item(),
                     }, step=global_step
                 )
-            
-            if global_step % cfg.eval_interval == 0 and global_step > 0:
-                val_loss = 0.0
-                val_acc = 0.0
-                val_step = 0.0
-                model.eval()
-                for batch in val_dataloader:
-                    val_images = batch["img"].unsqueeze(1).to(device)
-                    val_labels = batch["label"].to(device)
-                    with torch.no_grad():
-                        val_outputs = model(val_images)
-                        val_loss+=criterion(val_outputs, val_labels)
-                        val_acc+=(val_outputs.argmax(dim=1) == val_labels).float().mean()
-                    val_step += 1.
                     
-                print(f"\nValidation Loss: {val_loss.item()/val_step:.4f}, Accuracy: {val_acc.item()/val_step:.4f}")
-                
-                if wandb is not None and cfg.wandb_logging.use and cfg.wandb_logging.use:
-                    wandb.log(
-                        {
-                        "val/loss": val_loss.item()/val_step,
-                        "val/accuracy": val_acc.item()/val_step
-                        }, step=global_step
-                    )
-                
-                model.train()
-                            
             if global_step % cfg.save_interval == 0 and global_step > 0:
                 save_path = Path(cfg.checkpoint_dir)
                 save_path.mkdir(parents=True, exist_ok=True)
                 torch.save(model.state_dict(), save_path/f"resnet18_step{global_step}.pt")
             
-            global_step += 1
-
+        val_loss = 0.0
+        val_acc = 0.0
+        val_step = 0.0
+        model.eval()
+        for batch in val_dataloader:
+            val_images = batch["img"].unsqueeze(1).to(device)
+            val_labels = batch["label"].to(device)
+            with torch.no_grad():
+                val_outputs = model(val_images)
+                val_loss+=criterion(val_outputs, val_labels)
+                val_acc+=(val_outputs.argmax(dim=1) == val_labels).float().mean()
+            val_step += 1.
+            
+        print(f"\nValidation Loss: {val_loss.item()/val_step:.4f}, Accuracy: {val_acc.item()/val_step:.4f}")
         
-        print(f"Epoch {epoch+1}/{cfg.num_epochs}, Loss: {loss.item():.4f}")
+        if wandb is not None and cfg.wandb_logging.use and cfg.wandb_logging.use:
+            wandb.log(
+                {
+                "val/loss": val_loss.item()/val_step,
+                "val/accuracy": val_acc.item()/val_step
+                }, step=global_step
+            )
+        
+        model.train()
+            
+        print(f"Epoch {epoch+1}/{cfg.num_epochs} completed.")
+        global_step += 1
 
 def load_cfgs(
     _CONFIG_FILE,

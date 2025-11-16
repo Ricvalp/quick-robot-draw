@@ -5,21 +5,21 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Build Images Dataset",
+            "name": "Cache Images Dataset",
             "type": "debugpy",
             "request": "launch",
-            "program": "scripts/build_images_dataset.py",
+            "program": "scripts/cache_images.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "."
             },
             "args": [
-                "--config", "config/data_config.yaml",
-                "--output-root", "data/imgs",
-                "--img-size", "64",
-                "--line-width", "1.6",
-                "--num-workers", "8"
+                "--config=fid/configs/cache.py",
+                "--config.dataset_path=data/",
+                "--config.output_dir=/mnt/external_storage/robotics/quick-robot-draw/imgs/",
+                "--config.shard_size=10000",
+                "--config.family_to_label_path=fid/family_to_label.yaml"
             ]
         },
         {
@@ -92,6 +92,25 @@
                 "--data-root", "data/",
                 "--num-workers", "1",
                 // "--wandb-project", "quickdraw-diffusion"
+            ]
+        },
+        {
+            "name": "Train ResNet18 for FID",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "fid/train_resnet18.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "."
+            },
+            "args": [
+                "--config=fid/configs/train.py",
+                "--config.data_dir=/mnt/external_storage/robotics/quick-robot-draw/imgs/",
+                "--config.batch_size=128",
+                "--config.num_epochs=10",
+                "--config.num_workers=0",
+                "--config.wandb_logging.use=False",
             ]
         }
     ]

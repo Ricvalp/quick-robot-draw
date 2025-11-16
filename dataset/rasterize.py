@@ -19,7 +19,6 @@ except ImportError:
 __all__ = [
     "RasterizerConfig",
     "rasterize_absolute_points",
-    "rasterize_processed_sketch",
 ]
 
 
@@ -71,13 +70,15 @@ def _draw_points(draw: "_PILImageDraw.ImageDraw", points: np.ndarray, radius: in
 
 
 def rasterize_absolute_points(
-    absolute: np.ndarray,
-    pen: np.ndarray,
+    sketch: np.ndarray,
     *,
     config: RasterizerConfig,
 ) -> np.ndarray:
     """Render a sequence of absolute points + pen states to a `[H, W]` image."""
 
+    absolute = sketch[:, :2]
+    pen = sketch[:, 2]
+    
     if Image is None or ImageDraw is None:  # pragma: no cover - dependency optional
         raise RuntimeError(
             "Pillow is required for rasterisation. Install it via 'pip install pillow'."
@@ -122,13 +123,3 @@ def rasterize_absolute_points(
 
     array = np.asarray(img, dtype=np.float32) / 255.0
     return array.astype(np.float32, copy=False)
-
-
-def rasterize_processed_sketch(sketch: ProcessedSketch, config: RasterizerConfig) -> np.ndarray:
-    """Render a preprocessed sketch into a grayscale image."""
-
-    return rasterize_absolute_points(
-        sketch.absolute,
-        sketch.pen,
-        config=config,
-    )

@@ -1,0 +1,347 @@
+# Mapping from QuickDraw family names to label indices.
+
+"The Eiffel Tower": 0
+"The Great Wall of China": 1
+"The Mona Lisa": 2
+"aircraft carrier": 3
+"airplane": 4
+"alarm clock": 5
+"ambulance": 6
+"angel": 7
+"animal migration": 8
+"ant": 9
+"anvil": 10
+"apple": 11
+"arm": 12
+"asparagus": 13
+"axe": 14
+"backpack": 15
+"banana": 16
+"bandage": 17
+"barn": 18
+"baseball": 19
+"baseball bat": 20
+"basket": 21
+"basketball": 22
+"bat": 23
+"bathtub": 24
+"beach": 25
+"bear": 26
+"beard": 27
+"bed": 28
+"bee": 29
+"belt": 30
+"bench": 31
+"bicycle": 32
+"binoculars": 33
+"bird": 34
+"birthday cake": 35
+"blackberry": 36
+"blueberry": 37
+"book": 38
+"boomerang": 39
+"bottlecap": 40
+"bowtie": 41
+"bracelet": 42
+"brain": 43
+"bread": 44
+"bridge": 45
+"broccoli": 46
+"broom": 47
+"bucket": 48
+"bulldozer": 49
+"bus": 50
+"bush": 51
+"butterfly": 52
+"cactus": 53
+"cake": 54
+"calculator": 55
+"calendar": 56
+"camel": 57
+"camera": 58
+"camouflage": 59
+"campfire": 60
+"candle": 61
+"cannon": 62
+"canoe": 63
+"car": 64
+"carrot": 65
+"castle": 66
+"cat": 67
+"ceiling fan": 68
+"cell phone": 69
+"cello": 70
+"chair": 71
+"chandelier": 72
+"church": 73
+"circle": 74
+"clarinet": 75
+"clock": 76
+"cloud": 77
+"coffee cup": 78
+"compass": 79
+"computer": 80
+"cookie": 81
+"cooler": 82
+"couch": 83
+"cow": 84
+"crab": 85
+"crayon": 86
+"crocodile": 87
+"crown": 88
+"cruise ship": 89
+"cup": 90
+"diamond": 91
+"dishwasher": 92
+"diving board": 93
+"dog": 94
+"dolphin": 95
+"donut": 96
+"door": 97
+"dragon": 98
+"dresser": 99
+"drill": 100
+"drums": 101
+"duck": 102
+"dumbbell": 103
+"ear": 104
+"elbow": 105
+"elephant": 106
+"envelope": 107
+"eraser": 108
+"eye": 109
+"eyeglasses": 110
+"face": 111
+"fan": 112
+"feather": 113
+"fence": 114
+"finger": 115
+"fire hydrant": 116
+"fireplace": 117
+"firetruck": 118
+"fish": 119
+"flamingo": 120
+"flashlight": 121
+"flip flops": 122
+"floor lamp": 123
+"flower": 124
+"flying saucer": 125
+"foot": 126
+"fork": 127
+"frog": 128
+"frying pan": 129
+"garden": 130
+"garden hose": 131
+"giraffe": 132
+"goatee": 133
+"golf club": 134
+"grapes": 135
+"grass": 136
+"guitar": 137
+"hamburger": 138
+"hammer": 139
+"hand": 140
+"harp": 141
+"hat": 142
+"headphones": 143
+"hedgehog": 144
+"helicopter": 145
+"helmet": 146
+"hexagon": 147
+"hockey puck": 148
+"hockey stick": 149
+"horse": 150
+"hospital": 151
+"hot air balloon": 152
+"hot dog": 153
+"hot tub": 154
+"hourglass": 155
+"house": 156
+"house plant": 157
+"hurricane": 158
+"ice cream": 159
+"jacket": 160
+"jail": 161
+"kangaroo": 162
+"key": 163
+"keyboard": 164
+"knee": 165
+"knife": 166
+"ladder": 167
+"lantern": 168
+"laptop": 169
+"leaf": 170
+"leg": 171
+"light bulb": 172
+"lighter": 173
+"lighthouse": 174
+"lightning": 175
+"line": 176
+"lion": 177
+"lipstick": 178
+"lobster": 179
+"lollipop": 180
+"mailbox": 181
+"map": 182
+"marker": 183
+"matches": 184
+"megaphone": 185
+"mermaid": 186
+"microphone": 187
+"microwave": 188
+"monkey": 189
+"moon": 190
+"mosquito": 191
+"motorbike": 192
+"mountain": 193
+"mouse": 194
+"moustache": 195
+"mouth": 196
+"mug": 197
+"mushroom": 198
+"nail": 199
+"necklace": 200
+"nose": 201
+"ocean": 202
+"octagon": 203
+"octopus": 204
+"onion": 205
+"oven": 206
+"owl": 207
+"paint can": 208
+"paintbrush": 209
+"palm tree": 210
+"panda": 211
+"pants": 212
+"paper clip": 213
+"parachute": 214
+"parrot": 215
+"passport": 216
+"peanut": 217
+"pear": 218
+"peas": 219
+"pencil": 220
+"penguin": 221
+"piano": 222
+"pickup truck": 223
+"picture frame": 224
+"pig": 225
+"pillow": 226
+"pineapple": 227
+"pizza": 228
+"pliers": 229
+"police car": 230
+"pond": 231
+"pool": 232
+"popsicle": 233
+"postcard": 234
+"potato": 235
+"power outlet": 236
+"purse": 237
+"rabbit": 238
+"raccoon": 239
+"radio": 240
+"rain": 241
+"rainbow": 242
+"rake": 243
+"remote control": 244
+"rhinoceros": 245
+"rifle": 246
+"river": 247
+"roller coaster": 248
+"rollerskates": 249
+"sailboat": 250
+"sandwich": 251
+"saw": 252
+"saxophone": 253
+"school bus": 254
+"scissors": 255
+"scorpion": 256
+"screwdriver": 257
+"sea turtle": 258
+"see saw": 259
+"shark": 260
+"sheep": 261
+"shoe": 262
+"shorts": 263
+"shovel": 264
+"sink": 265
+"skateboard": 266
+"skull": 267
+"skyscraper": 268
+"sleeping bag": 269
+"smiley face": 270
+"snail": 271
+"snake": 272
+"snorkel": 273
+"snowflake": 274
+"snowman": 275
+"soccer ball": 276
+"sock": 277
+"speedboat": 278
+"spider": 279
+"spoon": 280
+"spreadsheet": 281
+"square": 282
+"squiggle": 283
+"squirrel": 284
+"stairs": 285
+"star": 286
+"steak": 287
+"stereo": 288
+"stethoscope": 289
+"stitches": 290
+"stop sign": 291
+"stove": 292
+"strawberry": 293
+"streetlight": 294
+"string bean": 295
+"submarine": 296
+"suitcase": 297
+"sun": 298
+"swan": 299
+"sweater": 300
+"swing set": 301
+"sword": 302
+"syringe": 303
+"t-shirt": 304
+"table": 305
+"teapot": 306
+"teddy-bear": 307
+"telephone": 308
+"television": 309
+"tennis racquet": 310
+"tent": 311
+"tiger": 312
+"toaster": 313
+"toe": 314
+"toilet": 315
+"tooth": 316
+"toothbrush": 317
+"toothpaste": 318
+"tornado": 319
+"tractor": 320
+"traffic light": 321
+"train": 322
+"tree": 323
+"triangle": 324
+"trombone": 325
+"truck": 326
+"trumpet": 327
+"umbrella": 328
+"underwear": 329
+"van": 330
+"vase": 331
+"violin": 332
+"washing machine": 333
+"watermelon": 334
+"waterslide": 335
+"whale": 336
+"wheel": 337
+"windmill": 338
+"wine bottle": 339
+"wine glass": 340
+"wristwatch": 341
+"yoga": 342
+"zebra": 343
+"zigzag": 344

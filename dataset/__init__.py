@@ -24,6 +24,8 @@ from .loader import QuickDrawEpisodes
 from .diffusion import DiffusionCollator
 from . import visualize
 
+from .rasterize import RasterizerConfig, rasterize_absolute_points
+
 __all__ = [
     "QuickDrawPreprocessor",
     "ProcessedSketch",
@@ -39,4 +41,7 @@ __all__ = [
     "QuickDrawEpisodes",
     "DiffusionCollator",
     "visualize",
+    "RasterizerConfig",
+    "rasterize_absolute_points",
+    "rasterize_processed_sketch",
 ]

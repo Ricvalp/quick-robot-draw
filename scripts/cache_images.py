@@ -66,7 +66,7 @@ def main(_):
     
     raw_dataset = QuickDrawEpisodes(
         root=cfg.dataset_path,
-        split="train",
+        split="test",
         K=0,
         augment=False,
         coordinate_mode="absolute",

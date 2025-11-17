@@ -45,7 +45,7 @@ class EpisodeToImage:
             filtered = tokens[reset_idx[0] + 1:-1]
         else:
             raise ValueError("No reset token found in sketch tokens.")
-        return filtered[0:, :3]  # Keep only x, y, pen_state
+        return filtered[1:, :3]  # Keep only x, y, pen_state
 
 
 def decode_pt(sample):

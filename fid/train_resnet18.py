@@ -31,7 +31,7 @@ def main(_):
     val_dataloader = get_cached_loader(
         shard_glob=cfg.data_dir + "/val/*",
         batch_size=cfg.batch_size,
-        num_workers=0,
+        num_workers=2,
     )
     
     model = resnet18(pretrained=False)
@@ -80,6 +80,8 @@ def main(_):
                 save_path.mkdir(parents=True, exist_ok=True)
                 torch.save(model.state_dict(), save_path/f"resnet18_step{global_step}.pt")
             
+            global_step += 1
+            
         val_loss = 0.0
         val_acc = 0.0
         val_step = 0.0
@@ -92,6 +94,8 @@ def main(_):
                 val_loss+=criterion(val_outputs, val_labels)
                 val_acc+=(val_outputs.argmax(dim=1) == val_labels).float().mean()
             val_step += 1.
+            if val_step >= cfg.val_steps_per_epoch:
+                break
             
         print(f"\nValidation Loss: {val_loss.item()/val_step:.4f}, Accuracy: {val_acc.item()/val_step:.4f}")
         
@@ -106,7 +110,6 @@ def main(_):
         model.train()
             
         print(f"Epoch {epoch+1}/{cfg.num_epochs} completed.")
-        global_step += 1
 
 def load_cfgs(
     _CONFIG_FILE,
@@ -114,7 +117,6 @@ def load_cfgs(
     cfg = _CONFIG_FILE.value
 
     return cfg
-
 
 if __name__ == "__main__":
     import absl.app as app

@@ -52,7 +52,40 @@ def write_shards(raw_dataset, image_fn, family_to_label_dict, out_dir, shard_siz
 
     sink.close()
 
+
+def write_shards(raw_dataset, image_fn, family_to_label_dict, out_dir, shard_size=5000, split_fracs={"train":0.8, "val":0.1, "test":0.1}, seed=42):
+    """
+    Convert a raw dataset into preprocessed WebDataset shards.
+
+    raw_dataset: dataset where __getitem__ returns a *raw* unprocessed sample
+    collate_fn : your full collator (will be applied to each sample individually)
+    out_dir    : directory where shards are saved
+    shard_size : number of samples per .tar shard
+    """
+    
+    for split in split_fracs.keys():
+        os.makedirs(out_dir + f"/{split}", exist_ok=True)
+    
+    writers = {split: wds.ShardWriter(f"{out_dir}/{split}/shard-%06d.tar", maxcount=shard_size)
+               for split in split_fracs}
+    rng = torch.Generator().manual_seed(seed)
+    perm = torch.randperm(len(raw_dataset), generator=rng).tolist()
+    fam_counts = {fam: len(samples) for fam, samples in raw_dataset.family_to_samples.items()}
+    val_budget = {fam: max(1, int(fam_counts[fam] * split_fracs["val"])) for fam in fam_counts}
+    
+    for idx in perm:
+        processed = image_fn(raw_dataset[idx])
+        fam = processed["family"]
+        split = "val" if val_budget[fam] > 0 else "train"
+        if split == "val":
+            val_budget[fam] -= 1
+        writers[split].write(make_wds_sample(processed, family_to_label_dict))
+
+
+   
+
 _CONFIG_FILE = config_flags.DEFINE_config_file("config", default="fid/config.py")
+
 
 def main(_):
     cfg = load_cfgs(_CONFIG_FILE)
@@ -66,7 +99,7 @@ def main(_):
     
     raw_dataset = QuickDrawEpisodes(
         root=cfg.dataset_path,
-        split="test",
+        split="train",
         K=0,
         augment=False,
         coordinate_mode="absolute",

@@ -144,7 +144,7 @@ def _log_qualitative_samples(policy: DiTDiffusionPolicy, args: argparse.Namespac
 _CONFIG_FILE = config_flags.DEFINE_config_file("config", default="diffusion_policy/configs/in_context_imitation_learning.py")
 
 
-def main() -> None:
+def main(_) -> None:
     cfg = load_config(_CONFIG_FILE)
     set_seed(cfg.seed)
     device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")

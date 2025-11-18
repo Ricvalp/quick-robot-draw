@@ -23,5 +23,8 @@ def get_config() -> ConfigDict:
     cfg.wandb_logging.log_interval = 200
     cfg.wandb_logging.log_all = False
     
+    cfg.fid = ConfigDict()
+    cfg.fid.checkpoint_filename = "resnet18_step90000.pt"
+    
     
     return cfg

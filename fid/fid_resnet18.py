@@ -1,3 +1,6 @@
+from pathlib import Path
+from typing import Union
+
 import torch
 import torch.nn as nn
 from torchvision.models import resnet18
@@ -10,42 +13,34 @@ __all__ = [
 
 
 class ResNet18FeatureExtractor(nn.Module):
-    def __init__(self):
-        super(self).__init__()
+    def __init__(self, prertained_checkpoint_path: Union[str, Path]) -> None:
+        super().__init__()
         self.model = resnet18(pretrained=False)
+        self.model.conv1 = nn.Conv2d(
+            1, 64, kernel_size=7, stride=2, padding=3, bias=False
+        )
+        state_dict = torch.load(prertained_checkpoint_path)
+        self.model.load_state_dict(state_dict)
         self.model.fc = nn.Identity()  # Remove the final classification layer
     
     def forward(self, x):
         return self.model(x)
     
-def fid(images: torch.Tensor, resnet_checkpoint: str) -> torch.Tensor:
-    """
-    images: Tensor of shape (B, 1, H, W), grayscale images
-    returns: Tensor of shape (B, 512), feature vectors
-    """
-    device = images.device
-    model = ResNet18FeatureExtractor()
-    state_dict = torch.load(resnet_checkpoint, map_location=device)
-    model.load_state_dict(state_dict)
-    model = model.to(device)
-    model.eval()
-    with torch.no_grad():
-        features = model(images)
-    return features.cpu().numpy()
 
-def compute_fid(generated_images: torch.Tensor, statistics_path: str) -> float:
+def compute_fid(generated_features: torch.Tensor, statistics_path: str = None, statistics: dict = None) -> float:
     """
     generated_images: Tensor of shape (N, 1, H, W)
     statistics_path: path to .npz file containing 'mu' and 'sigma' of real images
     returns: FID score
     """
 
-    gen_features = fid(generated_images).cpu().numpy()
 
-    mu_gen = np.mean(gen_features, axis=0)
-    sigma_gen = np.cov(gen_features, rowvar=False)
+    mu_gen = np.mean(generated_features, axis=0)
+    sigma_gen = np.cov(generated_features, rowvar=False)
     
-    stats = np.load(statistics_path)
+    stats = np.load(statistics_path) if statistics_path is not None else statistics
+    if stats is None:
+        raise ValueError("Either statistics_path or statistics must be provided.")
     mu_real = stats['mu']
     sigma_real = stats['sigma']
 

@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict
+from ml_collections import ConfigDict, config_flags
 
 import torch
 from torch.utils.data import DataLoader
@@ -20,43 +21,13 @@ from dataset.loader import QuickDrawEpisodes
 from dataset.diffusion import DiffusionCollator
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train DiTDiffusionPolicy on QuickDraw.")
-    parser.add_argument("--data-root", type=str, default="data/", help="Processed dataset root.")
-    parser.add_argument("--split", type=str, default="train", help="Dataset split to use.")
-    parser.add_argument("--backend", type=str, default="lmdb", help="Storage backend.")
-    parser.add_argument("--K", type=int, default=5, help="Number of prompts per episode.")
-    parser.add_argument("--horizon", type=int, default=64, help="Prediction horizon.")
-    parser.add_argument("--batch-size", type=int, default=32, help="Mini-batch size.")
-    parser.add_argument("--epochs", type=int, default=200, help="Training epochs.")
-    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
-    parser.add_argument("--weight-decay", type=float, default=0.0, help="AdamW weight decay.")
-    parser.add_argument("--num-workers", type=int, default=4, help="Dataloader worker count.")
-    parser.add_argument("--device", type=str, default="cuda", help="Computation device.")
-    parser.add_argument("--seed", type=int, default=0, help="Random seed.")
-    parser.add_argument("--hidden-dim", type=int, default=512, help="Transformer hidden size.")
-    parser.add_argument("--num-layers", type=int, default=8, help="Transformer depth.")
-    parser.add_argument("--num-heads", type=int, default=8, help="Attention heads per layer.")
-    parser.add_argument("--mlp-dim", type=int, default=2048, help="Transformer MLP width.")
-    parser.add_argument("--dropout", type=float, default=0.0, help="Residual dropout.")
-    parser.add_argument("--attention-dropout", type=float, default=0.0, help="Attention dropout.")
-    parser.add_argument("--beta-start", type=float, default=0.0001, help="DDPM beta start.")
-    parser.add_argument("--beta-end", type=float, default=0.02, help="DDPM beta end.")
-    parser.add_argument("--beta-schedule", type=str, default="scaled_linear", help="DDPM schedule.")
-    parser.add_argument("--num-train-timesteps", type=int, default=1000, help="DDPM training timesteps.")
-    parser.add_argument("--num-inference-steps", type=int, default=50, help="Sampling steps (for inference).")
-    parser.add_argument("--checkpoint-dir", type=str, default="checkpoints", help="Directory to store checkpoints.")
-    parser.add_argument("--max-seq-len", type=int, default=512, help="Episode max sequence length.")
-    parser.add_argument("--wandb-project", type=str, default=None, help="Optional Weights & Biases project name.")
-    parser.add_argument("--wandb-run", type=str, default=None, help="Optional W&B run name.")
-    parser.add_argument("--wandb-entity", type=str, default=None, help="Optional W&B entity/team.")
-    parser.add_argument("--loss-log-every", type=int, default=200, help="Steps between logging batch loss to W&B.")
-    parser.add_argument("--eval-samples", type=int, default=4, help="Number of sketches to sample per epoch for qualitative monitoring.")
-    parser.add_argument("--eval-tokens", type=int, default=256, help="Tokens to generate per qualitative sample.")
-    parser.add_argument("--eval-interval", type=int, default=1, help="Epoch interval for qualitative sampling (set >1 to reduce frequency).")
-    parser.add_argument("--eval-sample-seed", type=int, default=42, help="Base seed for qualitative sampling noise.")
-    return parser.parse_args()
-
+def load_config(
+    _CONFIG_FILE: str
+    ) -> ConfigDict:
+    
+    cfg = _CONFIG_FILE.value
+    
+    return cfg
 
 def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
@@ -170,66 +141,69 @@ def _log_qualitative_samples(policy: DiTDiffusionPolicy, args: argparse.Namespac
         policy.train()
 
 
+_CONFIG_FILE = config_flags.DEFINE_config_file("config", default="diffusion_policy/configs/in_context_imitation_learning.py")
+
+
 def main() -> None:
-    args = parse_args()
-    set_seed(args.seed)
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    cfg = load_config(_CONFIG_FILE)
+    set_seed(cfg.seed)
+    device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
 
     dataset = QuickDrawEpisodes(
-        root=args.data_root,
-        split=args.split,
-        K=args.K,
-        backend=args.backend,
-        max_seq_len=args.max_seq_len,
+        root=cfg.data_root,
+        split=cfg.split,
+        K=cfg.K,
+        backend=cfg.backend,
+        max_seq_len=cfg.max_seq_len,
         augment=False,
-        seed=args.seed,
+        seed=cfg.seed,
         coordinate_mode="absolute",
     )
-    collator = DiffusionCollator(horizon=args.horizon, seed=args.seed)
+    collator = DiffusionCollator(horizon=cfg.horizon, seed=cfg.seed)
     dataloader = DataLoader(
         dataset,
-        batch_size=args.batch_size,
+        batch_size=cfg.batch_size,
         shuffle=True,
-        num_workers=args.num_workers,
+        num_workers=cfg.num_workers,
         pin_memory=True,
         drop_last=True,
         collate_fn=collator,
     )
 
     noise_scheduler_kwargs = {
-        "num_train_timesteps": args.num_train_timesteps,
-        "beta_start": args.beta_start,
-        "beta_end": args.beta_end,
-        "beta_schedule": args.beta_schedule,
+        "num_train_timesteps": cfg.num_train_timesteps,
+        "beta_start": cfg.beta_start,
+        "beta_end": cfg.beta_end,
+        "beta_schedule": cfg.beta_schedule,
     }
 
     policy_cfg = DiTDiffusionPolicyConfig(
         context_length=0,
-        horizon=args.horizon,
+        horizon=cfg.horizon,
         point_feature_dim=3,  # 2 positions + 1 pen state
         action_dim=3,  # x, y, pen
-        hidden_dim=args.hidden_dim,
-        num_layers=args.num_layers,
-        num_heads=args.num_heads,
-        mlp_dim=args.mlp_dim,
-        dropout=args.dropout,
-        attention_dropout=args.attention_dropout,
-        num_inference_steps=args.num_inference_steps,
+        hidden_dim=cfg.hidden_dim,
+        num_layers=cfg.num_layers,
+        num_heads=cfg.num_heads,
+        mlp_dim=cfg.mlp_dim,
+        dropout=cfg.dropout,
+        attention_dropout=cfg.attention_dropout,
+        num_inference_steps=cfg.num_inference_steps,
         noise_scheduler_kwargs=noise_scheduler_kwargs,
     )
     policy = DiTDiffusionPolicy(policy_cfg).to(device)
-    optimizer = torch.optim.AdamW(policy.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.AdamW(policy.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
-    save_dir = Path(args.checkpoint_dir)
+    save_dir = Path(cfg.checkpoint_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.wandb_project:
+    if cfg.wandb_project:
         wandb.init(
-            project=args.wandb_project,
-            name=args.wandb_run,
-            entity=args.wandb_entity,
+            project=cfg.wandb_project,
+            name=cfg.wandb_run,
+            entity=cfg.wandb_entity,
             config={
-                **vars(args),
+                **vars(cfg),
                 "model": policy_cfg,
             },
         )
@@ -242,11 +216,11 @@ def main() -> None:
 
     global_step = 0
 
-    for epoch in range(args.epochs):
+    for epoch in range(cfg.epochs):
         policy.train()
         running_loss = 0.0
         total_batches = 0
-        progress = tqdm(dataloader, desc=f"Epoch {epoch+1}/{args.epochs}", leave=False)
+        progress = tqdm(dataloader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False)
         for batch in progress:
 
             batch = {k: v.to(device) for k, v in batch.items()}
@@ -265,9 +239,9 @@ def main() -> None:
             progress.set_postfix({"mse": metrics["mse"]})
 
             if (
-                args.wandb_project
-                and args.loss_log_every > 0
-                and global_step % args.loss_log_every == 0
+                cfg.wandb_project
+                and cfg.loss_log_every > 0
+                and global_step % cfg.loss_log_every == 0
             ):
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
 
@@ -275,7 +249,7 @@ def main() -> None:
             raise RuntimeError("No valid batches processed; consider reducing the horizon or batch size.")
         avg_loss = running_loss / total_batches
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
-        if args.wandb_project:
+        if cfg.wandb_project:
             wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=epoch + 1)
 
         checkpoint_path = save_dir / f"policy_epoch_{epoch+1:03d}.pt"
@@ -289,11 +263,12 @@ def main() -> None:
             checkpoint_path,
         )
 
-        _log_qualitative_samples(policy, args, epoch, device)
+        _log_qualitative_samples(policy, cfg, epoch, device)
 
-    if args.wandb_project:
+    if cfg.wandb_project:
         wandb.finish()
 
 
 if __name__ == "__main__":
-    main()
+    from absl import app
+    app.run(main)

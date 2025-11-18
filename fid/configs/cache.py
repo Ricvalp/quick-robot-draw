@@ -11,6 +11,7 @@ def get_config() -> ConfigDict:
     cfg.family_to_label_path = config_dict.placeholder(str)
     cfg.checkpoint_dir = "fid/checkpoints/"
     cfg.shard_size = 100000
+    cfg.split_fracs = {'train': 0.8, 'val': 0.1}
     
     cfg.rasterizer_config = ConfigDict()
     cfg.rasterizer_config.img_size = 64

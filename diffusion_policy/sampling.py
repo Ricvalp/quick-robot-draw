@@ -33,7 +33,7 @@ class InContextDiffusionCollatorEval:
 
         for sample in batch:
             tokens = sample["tokens"]
-            reset_idx = (tokens[:, 5] == 1.0).nonzero(as_tuple=True)[0]
+            reset_idx = int((tokens[:, 5] == 1.0).nonzero(as_tuple=True)[0][0])
             context = tokens[:reset_idx].clone()
             points_batch.append(context)
             points_lengths.append(context.shape[0])

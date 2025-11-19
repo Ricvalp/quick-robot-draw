@@ -164,9 +164,7 @@ def main(_) -> None:
     for epoch in range(cfg.epochs):
         policy.train()
         running_loss = 0.0
-        global_step = 0
         eval_iterator = iter(eval_dataloader)
-
 
         progress = tqdm(dataloader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False)
         for batch in progress:

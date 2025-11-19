@@ -61,7 +61,9 @@ if TYPE_CHECKING:
     from PIL import ImageDraw as _PILImageDraw
 
 
-def _draw_points(draw: "_PILImageDraw.ImageDraw", points: np.ndarray, radius: int, value: int) -> None:
+def _draw_points(
+    draw: "_PILImageDraw.ImageDraw", points: np.ndarray, radius: int, value: int
+) -> None:
     if radius <= 0:
         radius = 1
     for x, y in points:
@@ -78,7 +80,7 @@ def rasterize_absolute_points(
 
     absolute = sketch[:, :2]
     pen = sketch[:, 2]
-    
+
     if Image is None or ImageDraw is None:  # pragma: no cover - dependency optional
         raise RuntimeError(
             "Pillow is required for rasterisation. Install it via 'pip install pillow'."
@@ -87,7 +89,11 @@ def rasterize_absolute_points(
     absolute = _ensure_array(absolute)
     pen = np.asarray(pen, dtype=np.float32).reshape(-1)
     if absolute.shape[0] == 0:
-        return np.full((config.img_size, config.img_size), config.background_value, dtype=np.float32)
+        return np.full(
+            (config.img_size, config.img_size),
+            config.background_value,
+            dtype=np.float32,
+        )
 
     if absolute.shape[0] != pen.shape[0]:
         raise ValueError("absolute and pen arrays must have the same length")

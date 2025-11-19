@@ -1,8 +1,9 @@
 from ml_collections import ConfigDict, config_dict
 
+
 def get_config() -> ConfigDict:
     cfg = ConfigDict()
-    
+
     cfg.checkpoint_dir = config_dict.placeholder(str)
     cfg.num_samples = 16
     cfg.steps = 256

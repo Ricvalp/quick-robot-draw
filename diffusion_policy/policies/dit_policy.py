@@ -17,7 +17,9 @@ class SinusoidalTimeEmbedding(nn.Module):
     def __init__(self, dim: int, base: float = 10000.0) -> None:
         super().__init__()
         half_dim = max(1, dim // 2)
-        inv_freq = base ** (-torch.arange(half_dim, dtype=torch.float32) / max(1, half_dim))
+        inv_freq = base ** (
+            -torch.arange(half_dim, dtype=torch.float32) / max(1, half_dim)
+        )
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.dim = dim
 
@@ -28,7 +30,12 @@ class SinusoidalTimeEmbedding(nn.Module):
         angles = values.unsqueeze(-1) * self.inv_freq
         emb = torch.cat([angles.sin(), angles.cos()], dim=-1)
         if emb.shape[-1] < self.dim:
-            pad = torch.zeros(*emb.shape[:-1], self.dim - emb.shape[-1], device=emb.device, dtype=emb.dtype)
+            pad = torch.zeros(
+                *emb.shape[:-1],
+                self.dim - emb.shape[-1],
+                device=emb.device,
+                dtype=emb.dtype,
+            )
             emb = torch.cat([emb, pad], dim=-1)
         return emb
 
@@ -87,9 +94,17 @@ class DiTDiffusionPolicy(nn.Module):
             nn.Linear(cfg.hidden_dim, cfg.action_dim),
         )
 
-        self.world_time_embedder = SinusoidalTimeEmbedding(cfg.hidden_dim, base=cfg.time_embedding_base)
-        self.diffusion_time_embedder = SinusoidalTimeEmbedding(cfg.hidden_dim, base=cfg.diffusion_embedding_base)
-        self.diffusion_proj = nn.Sequential(nn.Linear(cfg.hidden_dim, cfg.hidden_dim), nn.SiLU(), nn.Linear(cfg.hidden_dim, cfg.hidden_dim))
+        self.world_time_embedder = SinusoidalTimeEmbedding(
+            cfg.hidden_dim, base=cfg.time_embedding_base
+        )
+        self.diffusion_time_embedder = SinusoidalTimeEmbedding(
+            cfg.hidden_dim, base=cfg.diffusion_embedding_base
+        )
+        self.diffusion_proj = nn.Sequential(
+            nn.Linear(cfg.hidden_dim, cfg.hidden_dim),
+            nn.SiLU(),
+            nn.Linear(cfg.hidden_dim, cfg.hidden_dim),
+        )
 
         scheduler_kwargs = dict(cfg.noise_scheduler_kwargs or {})
         self.scheduler = DDPMScheduler(**scheduler_kwargs)
@@ -101,8 +116,12 @@ class DiTDiffusionPolicy(nn.Module):
 
     def _encode_context(self, points: torch.Tensor) -> torch.Tensor:
         batch_size, num_points = points.shape[:2]
-        indices = torch.arange(-num_points + 1, 1, device=points.device, dtype=torch.float32)
-        frame_time_emb = self.world_time_embedder(indices.unsqueeze(0).expand(batch_size, -1))
+        indices = torch.arange(
+            -num_points + 1, 1, device=points.device, dtype=torch.float32
+        )
+        frame_time_emb = self.world_time_embedder(
+            indices.unsqueeze(0).expand(batch_size, -1)
+        )
         point_tokens = self.point_feature_proj(points)
         point_tokens = point_tokens + frame_time_emb
 
@@ -111,7 +130,9 @@ class DiTDiffusionPolicy(nn.Module):
     def _encode_actions(self, actions: torch.Tensor) -> torch.Tensor:
         tokens = self.action_encoder(actions)
         batch = tokens.shape[0]
-        times = self.action_time_indices.to(device=actions.device, dtype=torch.float32).expand(batch, -1)
+        times = self.action_time_indices.to(
+            device=actions.device, dtype=torch.float32
+        ).expand(batch, -1)
         time_emb = self.world_time_embedder(times)
         return tokens + time_emb
 
@@ -119,7 +140,9 @@ class DiTDiffusionPolicy(nn.Module):
         emb = self.diffusion_time_embedder(timesteps.float().unsqueeze(1))[:, 0, :]
         return self.diffusion_proj(emb)
 
-    def compute_loss(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
+    def compute_loss(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, Dict[str, float]]:
 
         points = batch["points"]
         actions = batch["actions"]
@@ -137,18 +160,22 @@ class DiTDiffusionPolicy(nn.Module):
 
         context_tokens = self._encode_context(points)
         action_tokens = self._encode_actions(noisy_actions)
-        
+
         tokens = torch.cat([context_tokens, action_tokens], dim=1)
 
         diffusion_cond = self._diffusion_condition(timesteps)
-        encoded = self.transformer(tokens, key_padding_mask=~mask, diffusion_time_cond=diffusion_cond)
+        encoded = self.transformer(
+            tokens, key_padding_mask=~mask, diffusion_time_cond=diffusion_cond
+        )
         pred = self.output_head(encoded[:, -self.cfg.horizon :, :])
 
         loss = F.mse_loss(pred, noise)
         metrics = {"mse": float(loss.detach().cpu())}
         return loss, metrics
 
-    def forward(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
+    def forward(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, Dict[str, float]]:
         return self.compute_loss(batch)
 
     def sample_actions(
@@ -178,7 +205,10 @@ class DiTDiffusionPolicy(nn.Module):
         if observation is None:
             observation = {}
 
-        context = observation.get("points") or observation.get("context")
+        context = observation.get("points")
+        if context is None:
+            context = observation.get("context")
+            
         if context is None:
             context = points
         if context is None:
@@ -203,14 +233,30 @@ class DiTDiffusionPolicy(nn.Module):
             if mask is not None:
                 mask = mask.to(device=device, dtype=torch.bool)
                 mask = torch.cat(
-                    [mask, torch.ones(batch_size, self.cfg.horizon, device=device, dtype=torch.bool)],
+                    [
+                        mask,
+                        torch.ones(
+                            batch_size,
+                            self.cfg.horizon,
+                            device=device,
+                            dtype=torch.bool,
+                        ),
+                    ],
                     dim=1,
                 )
         else:
             mask = mask.to(device=device, dtype=torch.bool)
             if mask.shape[1] == context_len:
                 mask = torch.cat(
-                    [mask, torch.ones(batch_size, self.cfg.horizon, device=device, dtype=torch.bool)],
+                    [
+                        mask,
+                        torch.ones(
+                            batch_size,
+                            self.cfg.horizon,
+                            device=device,
+                            dtype=torch.bool,
+                        ),
+                    ],
                     dim=1,
                 )
             elif mask.shape[1] != context_len + self.cfg.horizon:

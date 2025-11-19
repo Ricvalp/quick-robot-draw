@@ -45,7 +45,9 @@ def strokes_to_tokens(strokes: torch.Tensor) -> torch.Tensor:
     using `coordinate_mode="delta"`, since the deltas accumulate to absolute
     coordinates and the pen channel corresponds to "pen down" activations.
     """
-    tokens = torch.zeros(strokes.shape[0], 3, dtype=strokes.dtype, device=strokes.device)
+    tokens = torch.zeros(
+        strokes.shape[0], 3, dtype=strokes.dtype, device=strokes.device
+    )
     tokens[:, :2] = strokes[:, :2]
     tokens[:, 2] = strokes[:, 2]
     return tokens

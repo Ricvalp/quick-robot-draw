@@ -40,6 +40,7 @@ __all__ = [
     "EpisodeStorage",
     "QuickDrawEpisodes",
     "DiffusionCollator",
+    "InContextDiffusionCollator",
     "visualize",
     "RasterizerConfig",
     "rasterize_absolute_points",

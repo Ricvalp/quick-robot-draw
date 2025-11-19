@@ -92,15 +92,15 @@ class QuickDrawEpisodes(Dataset):
             samples = tmp_sketch_storage.samples_for_family(family)
             if len(samples) > 0:
                 self.family_to_samples[family] = samples
-                
+
         tmp_sketch_storage.close()
-        
+
         self.family_ids = sorted(self.family_to_samples.keys())
         if not self.family_ids:
             raise RuntimeError(f"No sketches found for split '{split}'.")
 
         self.base_rng = np.random.RandomState(seed)
-        
+
         self.sketch_storage = None
         self.builder = None
         self._worker_pid = None
@@ -121,7 +121,7 @@ class QuickDrawEpisodes(Dataset):
         )
         if self._episode_space == 0:
             self._episode_space = len(self.family_ids)
-    
+
     def __getstate__(self):
         """Customize pickling to avoid non-fork-safe resources."""
         state = self.__dict__.copy()
@@ -142,9 +142,9 @@ class QuickDrawEpisodes(Dataset):
 
         Deterministic seeds derived from `index` keep behaviour stable per epoch.
         """
-        
-        self._ensure_worker_state() # Initialize SketchStorage and EpisodeBuilder per worker
-        
+
+        self._ensure_worker_state()  # Initialize SketchStorage and EpisodeBuilder per worker
+
         worker = get_worker_info()
         if worker is None:
             base_seed = (self.seed + index) % (2**32)
@@ -203,10 +203,10 @@ class QuickDrawEpisodes(Dataset):
         """
         if self.sketch_storage is not None:
             self.sketch_storage.close()
-    
+
     def _ensure_worker_state(self) -> None:
         """Ensure per-worker state is initialized for multi-process loading.
-        
+
         Necessary because SketchStorage and EpisodeBuilder are not fork-safe.
         """
         pid = os.getpid()
@@ -226,6 +226,6 @@ class QuickDrawEpisodes(Dataset):
             coordinate_mode=self.coordinate_mode,
         )
         self._worker_pid = pid
-    
+
     def _fetch_family(self, family_id: str) -> List[str]:
         return self.family_to_samples[family_id]

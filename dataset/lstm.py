@@ -95,7 +95,6 @@ class LSTMCollator:
                 if end_idx <= tokens.shape[0]:
                     return tokens[start_idx:end_idx].clone()
 
-        
         print("WARNING: Falling back to automatic query extraction. Never tested!!!")
         reset_idx = self._first_index(tokens[:, 5])
         if reset_idx is None:
@@ -132,8 +131,12 @@ class LSTMCollator:
         pen_up = stroke_end.float()
         eos = torch.zeros_like(pen_down)
 
-        strokes = torch.stack([deltas[:, 0], deltas[:, 1], pen_down, pen_up, eos], dim=-1)
-        strokes = torch.cat([strokes, self._eos_row(strokes.device, strokes.dtype)], dim=0)
+        strokes = torch.stack(
+            [deltas[:, 0], deltas[:, 1], pen_down, pen_up, eos], dim=-1
+        )
+        strokes = torch.cat(
+            [strokes, self._eos_row(strokes.device, strokes.dtype)], dim=0
+        )
         return strokes
 
     def _truncate(self, strokes: torch.Tensor, max_len: int) -> torch.Tensor:

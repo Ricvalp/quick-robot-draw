@@ -16,18 +16,17 @@ from tqdm.auto import tqdm
 import wandb
 
 from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion_policy.sampling import make_start_token, sample_quickdraw_tokens, tokens_to_figure
+from diffusion_policy.sampling import InContextDiffusionCollatorEval, sample_quickdraw_tokens, tokens_to_figure
 from dataset.loader import QuickDrawEpisodes
-from dataset.diffusion import DiffusionCollator
+from dataset.diffusion import InContextDiffusionCollator
 
 
-def load_config(
-    _CONFIG_FILE: str
-    ) -> ConfigDict:
-    
+def load_config(_CONFIG_FILE: str) -> ConfigDict:
+
     cfg = _CONFIG_FILE.value
-    
+
     return cfg
+
 
 def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
@@ -35,113 +34,50 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def build_policy_inputs(
-    batch: Dict[str, torch.Tensor],
-    horizon: int,
+def _log_qualitative_samples(
+    policy: DiTDiffusionPolicy,
+    context: torch.Tensor,
+    cfg: dict,
+    step: int,
     device: torch.device,
-) -> Dict[str, torch.Tensor]:
-    tokens = batch["tokens"]  # (B, T, 7)
-    context_mask = batch["context_mask"]  # (B, T)
-    target_mask = batch["target_mask"]  # (B, T)
-
-    proprio_list = []
-    positions_list = []
-    colours_list = []
-    actions_list = []
-
-    for i in range(tokens.shape[0]):
-        ctx_tokens = tokens[i][context_mask[i]]
-        tgt_tokens = tokens[i][target_mask[i]]
-
-        if ctx_tokens.numel() == 0 or tgt_tokens.shape[0] != horizon:
-            continue
-
-        ctx_tokens = ctx_tokens.to(device=device, dtype=torch.float32)
-        tgt_tokens = tgt_tokens.to(device=device, dtype=torch.float32)
-
-        ctx_len = ctx_tokens.shape[0]
-        absolute = ctx_tokens[:, :2]
-        deltas = torch.zeros_like(absolute)
-        deltas[0] = absolute[0]
-        if ctx_len > 1:
-            deltas[1:] = absolute[1:] - absolute[:-1]
-
-        proprio = deltas
-        positions = torch.cat([absolute, torch.zeros(ctx_len, 1, device=device)], dim=1).view(ctx_len, 1, 3)
-        colours = torch.stack(
-            [
-                ctx_tokens[:, 2],
-                ctx_tokens[:, 4],
-                ctx_tokens[:, 6],
-            ],
-            dim=-1,
-        ).view(ctx_len, 1, 3)
-        target_absolute = tgt_tokens[:, :2]
-        target_deltas = torch.zeros_like(target_absolute)
-        if ctx_len > 0:
-            target_deltas[0] = target_absolute[0] - absolute[-1]
-        else:
-            target_deltas[0] = target_absolute[0]
-        if horizon > 1:
-            target_deltas[1:] = target_absolute[1:] - target_absolute[:-1]
-
-        proprio_list.append(proprio)
-        positions_list.append(positions)
-        colours_list.append(colours)
-        actions_list.append(torch.stack([target_deltas[:, 0], target_deltas[:, 1], tgt_tokens[:, 2]], dim=-1))
-
-    if not proprio_list:
-        raise ValueError("No valid samples in batch after preprocessing.")
-
-    return {
-        "proprio": torch.stack(proprio_list, dim=0),
-        "observation": {
-            "positions": torch.stack(positions_list, dim=0),
-            "colors": torch.stack(colours_list, dim=0),
-        },
-        "actions": torch.stack(actions_list, dim=0),
-    }
-
-
-def _log_qualitative_samples(policy: DiTDiffusionPolicy, args: argparse.Namespace, epoch: int, device: torch.device) -> None:
+) -> None:
     """Sample sketches and push them to WandB for quick visual inspection."""
 
-    if args.wandb_project is None or args.eval_samples <= 0:
-        return
-    if (epoch + 1) % max(1, args.eval_interval) != 0:
+    if cfg.wandb_project is None or cfg.eval_samples <= 0:
         return
 
     prev_mode = policy.training
     policy.eval()
 
     generator = torch.Generator(device=device)
-    generator.manual_seed(args.eval_sample_seed + epoch)
+    generator.manual_seed(cfg.eval_sample_seed + step)
 
-    start = make_start_token(args.eval_samples, policy.cfg.point_feature_dim, device)
     samples = sample_quickdraw_tokens(
-        policy,
-        args.eval_tokens,
-        start_token=start,
+        policy=policy,
+        max_tokens=cfg.eval_max_tokens,
+        context=context,
         generator=generator,
     )
 
     import matplotlib.pyplot as plt
 
     images = []
-    batch = samples.shape[0]
-    for idx in range(batch):
+    batch_size = len(samples)
+    for idx in range(batch_size):
         fig = tokens_to_figure(samples[idx], coordinate_mode="absolute")
-        images.append(wandb.Image(fig, caption=f"epoch {epoch + 1} sample {idx}"))
+        images.append(wandb.Image(fig, caption=f"step {step + 1} sample {idx}"))
         plt.close(fig)
 
     if images:
-        wandb.log({"samples/sketches": images}, step=epoch + 1)
+        wandb.log({"samples/sketches": images}, step=step + 1)
 
     if prev_mode:
         policy.train()
 
 
-_CONFIG_FILE = config_flags.DEFINE_config_file("config", default="diffusion_policy/configs/in_context_imitation_learning.py")
+_CONFIG_FILE = config_flags.DEFINE_config_file(
+    "config", default="diffusion_policy/configs/in_context_imitation_learning.py"
+)
 
 
 def main(_) -> None:
@@ -159,7 +95,7 @@ def main(_) -> None:
         seed=cfg.seed,
         coordinate_mode="absolute",
     )
-    collator = DiffusionCollator(horizon=cfg.horizon, seed=cfg.seed)
+    collator = InContextDiffusionCollator(horizon=cfg.horizon, seed=cfg.seed)
     dataloader = DataLoader(
         dataset,
         batch_size=cfg.batch_size,
@@ -169,7 +105,15 @@ def main(_) -> None:
         drop_last=True,
         collate_fn=collator,
     )
-
+    
+    eval_collator = InContextDiffusionCollatorEval()
+    eval_dataloader = DataLoader(
+        dataset,
+        batch_size=cfg.eval_samples,
+        shuffle=True,
+        collate_fn=eval_collator,
+    )
+    
     noise_scheduler_kwargs = {
         "num_train_timesteps": cfg.num_train_timesteps,
         "beta_start": cfg.beta_start,
@@ -180,8 +124,8 @@ def main(_) -> None:
     policy_cfg = DiTDiffusionPolicyConfig(
         context_length=0,
         horizon=cfg.horizon,
-        point_feature_dim=3,  # 2 positions + 1 pen state
-        action_dim=3,  # x, y, pen
+        point_feature_dim=7,  # 2 positions + 1 pen state + 4 special tokens
+        action_dim=7,  # x, y, pen
         hidden_dim=cfg.hidden_dim,
         num_layers=cfg.num_layers,
         num_heads=cfg.num_heads,
@@ -192,7 +136,9 @@ def main(_) -> None:
         noise_scheduler_kwargs=noise_scheduler_kwargs,
     )
     policy = DiTDiffusionPolicy(policy_cfg).to(device)
-    optimizer = torch.optim.AdamW(policy.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    optimizer = torch.optim.AdamW(
+        policy.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+    )
 
     save_dir = Path(cfg.checkpoint_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -200,7 +146,6 @@ def main(_) -> None:
     if cfg.wandb_project:
         wandb.init(
             project=cfg.wandb_project,
-            name=cfg.wandb_run,
             entity=cfg.wandb_entity,
             config={
                 **vars(cfg),
@@ -219,7 +164,10 @@ def main(_) -> None:
     for epoch in range(cfg.epochs):
         policy.train()
         running_loss = 0.0
-        total_batches = 0
+        global_step = 0
+        eval_iterator = iter(eval_dataloader)
+
+
         progress = tqdm(dataloader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False)
         for batch in progress:
 
@@ -232,10 +180,8 @@ def main(_) -> None:
             torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
             optimizer.step()
 
-            global_step += 1
-
             running_loss += float(loss.detach().cpu())
-            total_batches += 1
+            global_step += 1
             progress.set_postfix({"mse": metrics["mse"]})
 
             if (
@@ -245,9 +191,21 @@ def main(_) -> None:
             ):
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
 
-        if total_batches == 0:
-            raise RuntimeError("No valid batches processed; consider reducing the horizon or batch size.")
-        avg_loss = running_loss / total_batches
+            if global_step % cfg.eval_interval == 0:
+                try:
+                    context = next(eval_iterator)
+                    _log_qualitative_samples(
+                        policy=policy,
+                        context=context,
+                        cfg=cfg,
+                        step=global_step,
+                        device=device,
+                        )
+                except StopIteration as err:
+                    print("WARNING:" , err)
+
+
+        avg_loss = running_loss / global_step
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
         if cfg.wandb_project:
             wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=epoch + 1)
@@ -263,12 +221,11 @@ def main(_) -> None:
             checkpoint_path,
         )
 
-        _log_qualitative_samples(policy, cfg, epoch, device)
-
     if cfg.wandb_project:
         wandb.finish()
 
 
 if __name__ == "__main__":
     from absl import app
+
     app.run(main)

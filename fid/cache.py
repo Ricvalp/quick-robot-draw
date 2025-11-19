@@ -22,14 +22,13 @@ class EpisodeToImage:
 
     def __init__(self, rasterizer_config) -> None:
         self.rasterizer_config = rasterizer_config
-        
-    def __call__(self, sketch: Dict[str, torch.Tensor]): # -> Dict[str, torch.Tensor]:
+
+    def __call__(self, sketch: Dict[str, torch.Tensor]):  # -> Dict[str, torch.Tensor]:
 
         tokens = sketch["tokens"]
         filtered = self._filter_tokens(tokens)
         img = rasterize_absolute_points(
-            sketch=filtered.numpy(),
-            config=self.rasterizer_config
+            sketch=filtered.numpy(), config=self.rasterizer_config
         )
 
         return {
@@ -42,7 +41,7 @@ class EpisodeToImage:
         """Drop special tokens, keeping only actual sketch."""
         reset_idx = (tokens[:, 5] == 1.0).nonzero(as_tuple=True)[0]
         if reset_idx.numel() > 0:
-            filtered = tokens[reset_idx[0] + 1:-1]
+            filtered = tokens[reset_idx[0] + 1 : -1]
         else:
             raise ValueError("No reset token found in sketch tokens.")
         return filtered[1:, :3]  # Keep only x, y, pen_state
@@ -58,29 +57,31 @@ def decode_pt(sample):
     for key, value in sample.items():
         if key.endswith(".pt"):
             buf = io.BytesIO(value)
-            decoded[key[:-3]] = torch.load(buf, weights_only=False)   # remove ".pt"
+            decoded[key[:-3]] = torch.load(buf, weights_only=False)  # remove ".pt"
     return decoded
+
 
 def cached_collate(samples):
 
     batch = {}
-    batch['img'] = torch.cat([s['img'] for s in samples], dim=0)
-    batch['label'] = torch.cat([s['label'] for s in samples], dim=0)
-    
+    batch["img"] = torch.cat([s["img"] for s in samples], dim=0)
+    batch["label"] = torch.cat([s["label"] for s in samples], dim=0)
+
     # for key in samples[0].keys():
     #     batch[key] = torch.cat([s[key] for s in samples], dim=0)
-    
+
     return batch
+
 
 def get_cached_loader(shard_glob, batch_size, num_workers=4):
     shards = sorted(glob(shard_glob))
 
     dataset = (
         wds.WebDataset(shards)
-           .decode()                               # identity, we decode manually
-           .to_tuple("img.pt", "label.pt")
-           .map(lambda tup: {"img.pt": tup[0], "label.pt": tup[1]})
-           .map(decode_pt)
+        .decode()  # identity, we decode manually
+        .to_tuple("img.pt", "label.pt")
+        .map(lambda tup: {"img.pt": tup[0], "label.pt": tup[1]})
+        .map(decode_pt)
     )
 
     return DataLoader(
@@ -91,5 +92,3 @@ def get_cached_loader(shard_glob, batch_size, num_workers=4):
         pin_memory=True,
         persistent_workers=True if num_workers > 0 else False,
     )
-
-

@@ -29,16 +29,17 @@ from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_
 #     parser.add_argument("--prefix", type=str, default="sketch", help="Filename prefix for saved samples.")
 #     return parser.parse_args()
 
-def load_config(
-    _CONFIG_FILE: str
-    ) -> ConfigDict:
-    
-    cfg = _CONFIG_FILE.value
-    
-    return cfg
-    
 
-def load_model(checkpoint_path: str, device: torch.device) -> Tuple[SketchRNN, Optional[int]]:
+def load_config(_CONFIG_FILE: str) -> ConfigDict:
+
+    cfg = _CONFIG_FILE.value
+
+    return cfg
+
+
+def load_model(
+    checkpoint_path: str, device: torch.device
+) -> Tuple[SketchRNN, Optional[int]]:
     state = torch.load(checkpoint_path, map_location=device)
     cfg_data = state.get("config")
     if isinstance(cfg_data, SketchRNNConfig):
@@ -51,14 +52,18 @@ def load_model(checkpoint_path: str, device: torch.device) -> Tuple[SketchRNN, O
     return model, state.get("epoch")
 
 
-_CONFIG_FILE = config_flags.DEFINE_config_file("config", default="lstm/configs/sample.py")
+_CONFIG_FILE = config_flags.DEFINE_config_file(
+    "config", default="lstm/configs/sample.py"
+)
 
 
 def main() -> None:
-    
+
     cfg = load_config(_CONFIG_FILE)
-    
-    device = torch.device(cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu")
+
+    device = torch.device(
+        cfg.device if torch.cuda.is_available() or cfg.device == "cpu" else "cpu"
+    )
     model, epoch = load_model(cfg.checkpoint, device)
     print(f"Loaded checkpoint '{cfg.checkpoint}' (epoch={epoch}).")
 
@@ -89,4 +94,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     from absl import app
+
     app.run(main)

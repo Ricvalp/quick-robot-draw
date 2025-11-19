@@ -10,7 +10,12 @@ import matplotlib.pyplot as plt
 import torch
 
 from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion_policy.sampling import make_start_token, sample_quickdraw_tokens, tokens_to_figure, tokens_to_gif
+from diffusion_policy.sampling import (
+    make_start_token,
+    sample_quickdraw_tokens,
+    tokens_to_figure,
+    tokens_to_gif,
+)
 
 try:  # PyTorch 2.6+ defaults to weights_only=True and blocks custom globals.
     from torch.serialization import add_safe_globals
@@ -21,17 +26,62 @@ except Exception:  # pragma: no cover - older PyTorch versions
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Sample QuickDraw sketches with a diffusion policy checkpoint.")
-    parser.add_argument("--checkpoint", required=True, help="Path to the saved policy checkpoint (.pt).")
-    parser.add_argument("--device", default="cuda", help="Computation device (e.g. cuda or cpu).")
-    parser.add_argument("--num-samples", type=int, default=4, help="Number of sketches to sample in a batch.")
-    parser.add_argument("--tokens-per-sample", type=int, default=256, help="How many tokens to generate per sketch.")
-    parser.add_argument("--seed", type=int, default=None, help="Optional RNG seed for deterministic sampling.")
-    parser.add_argument("--num-inference-steps", type=int, default=None, help="Override the diffusion sampler steps.")
-    parser.add_argument("--output-dir", type=str, default="figures", help="Directory to store generated figures (set empty to skip saving).")
-    parser.add_argument("--prefix", type=str, default="sample", help="Filename prefix for saved figures.")
-    parser.add_argument("--coordinate-mode", choices=["absolute", "delta"], default="absolute", help="Whether the tokens represent absolute coords or deltas.")
-    parser.add_argument("--show", action="store_true", help="Display the figures interactively after saving.")
+    parser = argparse.ArgumentParser(
+        description="Sample QuickDraw sketches with a diffusion policy checkpoint."
+    )
+    parser.add_argument(
+        "--checkpoint", required=True, help="Path to the saved policy checkpoint (.pt)."
+    )
+    parser.add_argument(
+        "--device", default="cuda", help="Computation device (e.g. cuda or cpu)."
+    )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=4,
+        help="Number of sketches to sample in a batch.",
+    )
+    parser.add_argument(
+        "--tokens-per-sample",
+        type=int,
+        default=256,
+        help="How many tokens to generate per sketch.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional RNG seed for deterministic sampling.",
+    )
+    parser.add_argument(
+        "--num-inference-steps",
+        type=int,
+        default=None,
+        help="Override the diffusion sampler steps.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="figures",
+        help="Directory to store generated figures (set empty to skip saving).",
+    )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        default="sample",
+        help="Filename prefix for saved figures.",
+    )
+    parser.add_argument(
+        "--coordinate-mode",
+        choices=["absolute", "delta"],
+        default="absolute",
+        help="Whether the tokens represent absolute coords or deltas.",
+    )
+    parser.add_argument(
+        "--show",
+        action="store_true",
+        help="Display the figures interactively after saving.",
+    )
     return parser.parse_args()
 
 
@@ -81,8 +131,16 @@ def main() -> None:
             fig.savefig(path, dpi=200, bbox_inches="tight")
             print(f"Saved {path}")
         figures.append(fig)
-        gif_path = output_dir / f"{args.prefix}_{idx:03d}.gif" if output_dir is not None else None
-        tokens_to_gif(sample, coordinate_mode=args.coordinate_mode, output_path=str(gif_path) if gif_path else None)
+        gif_path = (
+            output_dir / f"{args.prefix}_{idx:03d}.gif"
+            if output_dir is not None
+            else None
+        )
+        tokens_to_gif(
+            sample,
+            coordinate_mode=args.coordinate_mode,
+            output_path=str(gif_path) if gif_path else None,
+        )
 
     if args.show:
         for fig in figures:

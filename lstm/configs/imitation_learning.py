@@ -2,7 +2,7 @@ from ml_collections import ConfigDict, config_dict
 
 
 def get_config() -> ConfigDict:
-    
+
     cfg = ConfigDict()
     cfg.seed = 2024
     cfg.data_root = config_dict.placeholder(str)
@@ -37,7 +37,7 @@ def get_config() -> ConfigDict:
     cfg.greedy_eval = False
     cfg.profile = False
     cfg.trace_dir = "profiling/lstm/"
-    
+
     cfg.wandb_logging = ConfigDict()
     cfg.wandb_logging.use = False
     cfg.wandb_logging.project = "lstm-imitation-learning"
@@ -45,5 +45,5 @@ def get_config() -> ConfigDict:
     cfg.wandb_logging.run = None
     cfg.wandb_logging.log_interval = 200
     cfg.wandb_logging.log_all = False
-    
+
     return cfg

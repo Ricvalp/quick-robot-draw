@@ -33,7 +33,9 @@ class SketchRNNConfig:
 class MixtureDensityHead(nn.Module):
     """Project decoder states into 2D Gaussian mixture parameters + pen logits."""
 
-    def __init__(self, hidden_size: int, num_mixtures: int, pen_classes: int = 3) -> None:
+    def __init__(
+        self, hidden_size: int, num_mixtures: int, pen_classes: int = 3
+    ) -> None:
         super().__init__()
         self.num_mixtures = num_mixtures
         self.pen_classes = pen_classes
@@ -93,12 +95,20 @@ class SketchRNN(nn.Module):
 
         self.fc_mu = nn.Linear(2 * cfg.encoder_hidden_size, cfg.latent_dim)
         self.fc_logvar = nn.Linear(2 * cfg.encoder_hidden_size, cfg.latent_dim)
-        self.latent_to_hidden = nn.Linear(cfg.latent_dim, cfg.decoder_hidden_size * cfg.decoder_num_layers)
-        self.latent_to_cell = nn.Linear(cfg.latent_dim, cfg.decoder_hidden_size * cfg.decoder_num_layers)
+        self.latent_to_hidden = nn.Linear(
+            cfg.latent_dim, cfg.decoder_hidden_size * cfg.decoder_num_layers
+        )
+        self.latent_to_cell = nn.Linear(
+            cfg.latent_dim, cfg.decoder_hidden_size * cfg.decoder_num_layers
+        )
         self.mdn_head = MixtureDensityHead(cfg.decoder_hidden_size, cfg.num_mixtures)
 
-    def encode(self, strokes: torch.Tensor, lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        packed = pack_padded_sequence(strokes, lengths.cpu(), batch_first=True, enforce_sorted=False)
+    def encode(
+        self, strokes: torch.Tensor, lengths: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        packed = pack_padded_sequence(
+            strokes, lengths.cpu(), batch_first=True, enforce_sorted=False
+        )
         _, (hidden, _) = self.encoder(packed)
         # Grab the last layer for both directions.
         h_forward = hidden[-2]
@@ -115,8 +125,12 @@ class SketchRNN(nn.Module):
 
     def _init_decoder_state(self, z: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         batch = z.shape[0]
-        hidden = self.latent_to_hidden(z).view(batch, self.cfg.decoder_num_layers, self.cfg.decoder_hidden_size)
-        cell = self.latent_to_cell(z).view(batch, self.cfg.decoder_num_layers, self.cfg.decoder_hidden_size)
+        hidden = self.latent_to_hidden(z).view(
+            batch, self.cfg.decoder_num_layers, self.cfg.decoder_hidden_size
+        )
+        cell = self.latent_to_cell(z).view(
+            batch, self.cfg.decoder_num_layers, self.cfg.decoder_hidden_size
+        )
         hidden = hidden.permute(1, 0, 2).contiguous()
         cell = cell.permute(1, 0, 2).contiguous()
         return hidden, cell
@@ -129,9 +143,13 @@ class SketchRNN(nn.Module):
     ) -> torch.Tensor:
         latent_context = z.unsqueeze(1).expand(-1, inputs.shape[1], -1)
         decoder_inputs = torch.cat([inputs, latent_context], dim=-1)
-        packed = pack_padded_sequence(decoder_inputs, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        packed = pack_padded_sequence(
+            decoder_inputs, lengths.cpu(), batch_first=True, enforce_sorted=False
+        )
         outputs, _ = self.decoder(packed, self._init_decoder_state(z))
-        padded, _ = pad_packed_sequence(outputs, batch_first=True, total_length=inputs.shape[1])
+        padded, _ = pad_packed_sequence(
+            outputs, batch_first=True, total_length=inputs.shape[1]
+        )
         return padded
 
     def _lengths_to_mask(self, lengths: torch.Tensor, max_len: int) -> torch.Tensor:
@@ -223,8 +241,12 @@ class SketchRNN(nn.Module):
         masked = nll * mask
         return masked.sum() / mask.sum().clamp_min(1.0)
 
-    def _pen_loss(self, logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1), reduction="none")
+    def _pen_loss(
+        self, logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor
+    ) -> torch.Tensor:
+        loss = F.cross_entropy(
+            logits.reshape(-1, logits.shape[-1]), targets.reshape(-1), reduction="none"
+        )
         loss = loss.view_as(mask)
         masked = loss * mask
         return masked.sum() / mask.sum().clamp_min(1.0)
@@ -249,9 +271,13 @@ class SketchRNN(nn.Module):
         device = next(self.parameters()).device
         if generator is None:
             generator = torch.Generator(device=device)
-            generator.manual_seed(torch.randint(0, 2**31 - 1, (1,), device=device).item())
+            generator.manual_seed(
+                torch.randint(0, 2**31 - 1, (1,), device=device).item()
+            )
 
-        z = torch.randn(num_samples, self.cfg.latent_dim, device=device, generator=generator)
+        z = torch.randn(
+            num_samples, self.cfg.latent_dim, device=device, generator=generator
+        )
         hidden_state = self._init_decoder_state(z)
         prev = torch.zeros(num_samples, 5, device=device)
         prev[:, 3] = 1.0  # start with pen-up
@@ -302,8 +328,12 @@ class SketchRNN(nn.Module):
         gather_index = component.unsqueeze(-1)
         mu_x = torch.gather(params["mu_x"], dim=-1, index=gather_index).squeeze(-1)
         mu_y = torch.gather(params["mu_y"], dim=-1, index=gather_index).squeeze(-1)
-        log_sigma_x = torch.gather(params["log_sigma_x"], dim=-1, index=gather_index).squeeze(-1)
-        log_sigma_y = torch.gather(params["log_sigma_y"], dim=-1, index=gather_index).squeeze(-1)
+        log_sigma_x = torch.gather(
+            params["log_sigma_x"], dim=-1, index=gather_index
+        ).squeeze(-1)
+        log_sigma_y = torch.gather(
+            params["log_sigma_y"], dim=-1, index=gather_index
+        ).squeeze(-1)
         rho = torch.gather(params["rho"], dim=-1, index=gather_index).squeeze(-1)
 
         sigma_x = torch.exp(log_sigma_x) * temperature

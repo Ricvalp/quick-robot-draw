@@ -16,7 +16,11 @@ from tqdm.auto import tqdm
 import wandb
 
 from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion_policy.sampling import make_start_token, sample_quickdraw_tokens, tokens_to_figure
+from diffusion_policy.sampling import (
+    make_start_token,
+    sample_quickdraw_tokens_unconditional,
+    tokens_to_figure,
+)
 from dataset.loader import QuickDrawEpisodes
 from dataset.diffusion import DiffusionCollator
 
@@ -59,18 +63,18 @@ from dataset.diffusion import DiffusionCollator
 #     return parser.parse_args()
 
 
-def load_config(
-    _CONFIG_FILE: str
-    ) -> ConfigDict:
-    
+def load_config(_CONFIG_FILE: str) -> ConfigDict:
+
     cfg = _CONFIG_FILE.value
-    
+
     return cfg
+
 
 def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
 
 def build_policy_inputs(
     batch: Dict[str, torch.Tensor],
@@ -104,7 +108,9 @@ def build_policy_inputs(
             deltas[1:] = absolute[1:] - absolute[:-1]
 
         proprio = deltas
-        positions = torch.cat([absolute, torch.zeros(ctx_len, 1, device=device)], dim=1).view(ctx_len, 1, 3)
+        positions = torch.cat(
+            [absolute, torch.zeros(ctx_len, 1, device=device)], dim=1
+        ).view(ctx_len, 1, 3)
         colours = torch.stack(
             [
                 ctx_tokens[:, 2],
@@ -125,7 +131,11 @@ def build_policy_inputs(
         proprio_list.append(proprio)
         positions_list.append(positions)
         colours_list.append(colours)
-        actions_list.append(torch.stack([target_deltas[:, 0], target_deltas[:, 1], tgt_tokens[:, 2]], dim=-1))
+        actions_list.append(
+            torch.stack(
+                [target_deltas[:, 0], target_deltas[:, 1], tgt_tokens[:, 2]], dim=-1
+            )
+        )
 
     if not proprio_list:
         raise ValueError("No valid samples in batch after preprocessing.")
@@ -139,7 +149,13 @@ def build_policy_inputs(
         "actions": torch.stack(actions_list, dim=0),
     }
 
-def _log_qualitative_samples(policy: DiTDiffusionPolicy, args: argparse.Namespace, epoch: int, device: torch.device) -> None:
+
+def _log_qualitative_samples(
+    policy: DiTDiffusionPolicy,
+    args: argparse.Namespace,
+    epoch: int,
+    device: torch.device,
+) -> None:
     """Sample sketches and push them to WandB for quick visual inspection."""
 
     if args.wandb_project is None or args.eval_samples <= 0:
@@ -154,7 +170,7 @@ def _log_qualitative_samples(policy: DiTDiffusionPolicy, args: argparse.Namespac
     generator.manual_seed(args.eval_sample_seed + epoch)
 
     start = make_start_token(args.eval_samples, policy.cfg.point_feature_dim, device)
-    samples = sample_quickdraw_tokens(
+    samples = sample_quickdraw_tokens_unconditional(
         policy,
         args.eval_tokens,
         start_token=start,
@@ -177,7 +193,9 @@ def _log_qualitative_samples(policy: DiTDiffusionPolicy, args: argparse.Namespac
         policy.train()
 
 
-_CONFIG_FILE = config_flags.DEFINE_config_file("config", default="diffusion_policy/configs/imitation_learning.py")
+_CONFIG_FILE = config_flags.DEFINE_config_file(
+    "config", default="diffusion_policy/configs/imitation_learning.py"
+)
 
 
 def main() -> None:
@@ -228,7 +246,9 @@ def main() -> None:
         noise_scheduler_kwargs=noise_scheduler_kwargs,
     )
     policy = DiTDiffusionPolicy(policy_cfg).to(device)
-    optimizer = torch.optim.AdamW(policy.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    optimizer = torch.optim.AdamW(
+        policy.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+    )
 
     save_dir = Path(cfg.checkpoint_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -282,7 +302,9 @@ def main() -> None:
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
 
         if total_batches == 0:
-            raise RuntimeError("No valid batches processed; consider reducing the horizon or batch size.")
+            raise RuntimeError(
+                "No valid batches processed; consider reducing the horizon or batch size."
+            )
         avg_loss = running_loss / total_batches
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
         if cfg.wandb_project:
@@ -307,4 +329,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     from absl import app
+
     app.run(main)

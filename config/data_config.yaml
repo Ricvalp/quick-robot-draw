@@ -1,4 +1,4 @@
-root: "data/"
+root: "data/single_class/alarm_clock"
 raw_root: "raw/"
 backend: "lmdb"  # one of: lmdb, webdataset, hdf5
 num_prompts: 5
@@ -15,9 +15,9 @@ augmentations:
 storage:
   compression: "zstd"
   shards: 64
-# families:
-#   - alarm clock
-max_sketches_per_file: 10000
+families:
+  - alarm clock
+max_sketches_per_file: 100000
 cache:
   sketches_subdir: "processed_sketches"
   episodes_subdir: "episodes"

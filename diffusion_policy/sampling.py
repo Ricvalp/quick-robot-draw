@@ -71,15 +71,12 @@ def make_start_token(
 @torch.no_grad()
 def sample_quickdraw_tokens_unconditional(
     policy: torch.nn.Module,
-    total_tokens: int,
+    max_tokens: int,
     *,
     start_token: Optional[torch.Tensor] = None,
     generator: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
     """Autoregressively sample `total_tokens` conditioned on the growing context."""
-
-    if total_tokens <= 0:
-        raise ValueError("total_tokens must be positive.")
 
     device = next(policy.parameters()).device
     feature_dim = policy.cfg.point_feature_dim
@@ -94,7 +91,7 @@ def sample_quickdraw_tokens_unconditional(
         context = start_token.to(device=device)
 
     horizon = policy.cfg.horizon
-    num_chunks = math.ceil(total_tokens / horizon)
+    num_chunks = math.ceil(max_tokens / horizon)
     samples: list[torch.Tensor] = []
 
     for _ in range(num_chunks):
@@ -103,7 +100,8 @@ def sample_quickdraw_tokens_unconditional(
         context = torch.cat([context, actions], dim=1)
 
     generated = torch.cat(samples, dim=1)
-    return generated[:, :total_tokens, :]
+    sketches = clean_sketches(generated)
+    return sketches
 
 
 @torch.no_grad()

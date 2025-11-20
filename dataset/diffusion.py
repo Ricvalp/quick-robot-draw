@@ -28,37 +28,42 @@ class DiffusionCollator:
     def __call__(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         points_batch: List[torch.Tensor] = []
         actions_batch: List[int] = []
-        trim_lengths: List[int] = []
+        actions_lengths: List[int] = []
         points_lengths: List[int] = []
 
         for sample in batch:
             tokens = sample["tokens"]
             filtered = self._filter_tokens(tokens)
             seq_len = filtered.shape[0]
-            if seq_len < self.horizon + 1:
-                continue
-            start_idx = int(self.rng.integers(1, seq_len - self.horizon + 1))
-            trim_len = start_idx + self.horizon
-            points = filtered[:start_idx].clone()
-            actions = filtered[start_idx:trim_len].clone()
 
+            start_idx = int(self.rng.integers(1, seq_len + 1))
+            points = filtered[:start_idx].clone()
+            actions = filtered[start_idx: start_idx+self.horizon].clone()
+            
+            if actions.shape[0] < self.horizon:
+                actions = self._pad_actions(actions)
+
+            end_of_context_token = torch.tensor([[0., 0., 0., 0., 0., 1., 0.]])
+            points = torch.cat([points, end_of_context_token])
+            
             points_batch.append(points)
             actions_batch.append(actions)
-            trim_lengths.append(trim_len)
-            points_lengths.append(start_idx)
+            actions_lengths.append(actions.shape[0])
+            points_lengths.append(points.shape[0])
 
         if not points_batch:
             raise ValueError("No valid samples for diffusion collator.")
 
-        max_len = max(trim_lengths)
+        max_len = max([point_len + action_len for point_len, action_len in zip(points_lengths, actions_lengths)])
+        max_points_len = max(points_lengths)
         batch_size = len(points_batch)
         feature_dim = points_batch[0].shape[-1]
 
-        points = torch.zeros(batch_size, max_len, feature_dim, dtype=torch.float32)
+        points = torch.zeros(batch_size, max_points_len, feature_dim, dtype=torch.float32)
         actions = torch.zeros(
             batch_size, self.horizon, feature_dim, dtype=torch.float32
         )
-        mask = torch.zeros(batch_size, max_len + self.horizon, dtype=torch.bool)
+        mask = torch.zeros(batch_size, max_len, dtype=torch.bool)
 
         for idx, (pts, acts, points_len) in enumerate(
             zip(points_batch, actions_batch, points_lengths)
@@ -69,6 +74,15 @@ class DiffusionCollator:
 
         return {"points": points, "actions": actions, "mask": mask}
 
+
+    def _pad_actions(self, actions):
+        
+        pad_len = self.horizon - actions.shape[0]
+        padding = torch.tensor([[0., 0., 0., 0., 0., 0., 1.]]).tile(pad_len, 1)
+        
+        return torch.cat([actions, padding])
+
+
     @staticmethod
     def _filter_tokens(tokens: torch.Tensor) -> torch.Tensor:
         """Drop special tokens, keeping only actual sketch deltas."""
@@ -77,7 +91,7 @@ class DiffusionCollator:
             filtered = tokens[reset_idx[0] + 1 : -1]
         else:
             raise ValueError("No reset token found in sketch tokens.")
-        return filtered[:, :3]  # Keep only x, y, pen_state
+        return filtered  # Keep only x, y, pen_state
 
 
 class InContextDiffusionCollator:

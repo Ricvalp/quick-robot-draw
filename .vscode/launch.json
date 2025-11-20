@@ -65,17 +65,20 @@
             "name": "Train QuickDraw Diffusion",
             "type": "debugpy",
             "request": "launch",
-            "program": "diffusion_policy/train_quickdraw.py",
+            "program": "diffusion_policy/train_imitation_learning.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "."
             },
             "args": [
-                "--data-root", "data/",
-                "--horizon", "16",
-                "--num-workers", "0",
-                "--wandb-project", "quickdraw-diffusion"
+                "--config=diffusion_policy/configs/imitation_learning.py",
+                "--config.data_root=data/single_class/alarm_clock/",
+                "--config.horizon=8",
+                "--config.num_workers=0",
+                "--config.checkpoint_dir=diffusion_policy/checkpoints/imitation_learning/",
+                "--config.wandb_use=False",
+                "--config.loss_log_every=50"
             ]
         },
                 {

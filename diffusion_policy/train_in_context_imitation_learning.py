@@ -206,7 +206,7 @@ def main(_) -> None:
         avg_loss = running_loss / global_step
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
         if cfg.wandb_project:
-            wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=epoch + 1)
+            wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=global_step)
 
         checkpoint_path = save_dir / f"policy_epoch_{epoch+1:03d}.pt"
         torch.save(

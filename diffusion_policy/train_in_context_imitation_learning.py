@@ -164,6 +164,7 @@ def main(_) -> None:
     for epoch in range(cfg.epochs):
         policy.train()
         running_loss = 0.0
+        step = 0
         eval_iterator = iter(eval_dataloader)
 
         progress = tqdm(dataloader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False)
@@ -180,6 +181,7 @@ def main(_) -> None:
 
             running_loss += float(loss.detach().cpu())
             global_step += 1
+            step += 1
             progress.set_postfix({"mse": metrics["mse"]})
 
             if (
@@ -203,7 +205,7 @@ def main(_) -> None:
                     print("WARNING:" , err)
 
 
-        avg_loss = running_loss / global_step
+        avg_loss = running_loss / step
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
         if cfg.wandb_project:
             wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=global_step)

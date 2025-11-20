@@ -35,7 +35,6 @@ def load_config(_CONFIG_FILE: str) -> ConfigDict:
 
     return cfg
 
-
 def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -161,7 +160,7 @@ def main(_) -> None:
     for epoch in range(cfg.epochs):
         policy.train()
         running_loss = 0.0
-        total_batches = 0
+        step = 0 
         progress = tqdm(dataloader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False)
         for batch in progress:
 
@@ -177,7 +176,6 @@ def main(_) -> None:
             global_step += 1
 
             running_loss += float(loss.detach().cpu())
-            total_batches += 1
             progress.set_postfix({"mse": metrics["mse"]})
 
             if (
@@ -186,12 +184,8 @@ def main(_) -> None:
                 and global_step % cfg.loss_log_every == 0
             ):
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
-            
-        if total_batches == 0:
-            raise RuntimeError(
-                "No valid batches processed; consider reducing the horizon or batch size."
-            )
-        avg_loss = running_loss / total_batches
+
+        avg_loss = running_loss / step
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
         if cfg.wandb_use:
             wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=global_step)

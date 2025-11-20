@@ -1,4 +1,4 @@
-root: "data/single_class/alarm_clock"
+root: "data/single_class/eyeglasses"
 raw_root: "raw/"
 backend: "lmdb"  # one of: lmdb, webdataset, hdf5
 num_prompts: 5
@@ -16,7 +16,7 @@ storage:
   compression: "zstd"
   shards: 64
 families:
-  - alarm clock
+  - eyeglasses
 max_sketches_per_file: 100000
 cache:
   sketches_subdir: "processed_sketches"

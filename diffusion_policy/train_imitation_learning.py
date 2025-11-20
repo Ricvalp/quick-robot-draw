@@ -174,6 +174,7 @@ def main(_) -> None:
             optimizer.step()
 
             global_step += 1
+            step += 1
 
             running_loss += float(loss.detach().cpu())
             progress.set_postfix({"mse": metrics["mse"]})

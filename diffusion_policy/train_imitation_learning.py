@@ -184,22 +184,23 @@ def main(_) -> None:
                 and global_step % cfg.loss_log_every == 0
             ):
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
+            
+            if global_step % cfg.save_checkpoint_every == 0:
+                checkpoint_path = save_dir / f"policy_epoch_{epoch+1:03d}.pt"
+                torch.save(
+                    {
+                        "epoch": epoch + 1,
+                        "model_state_dict": policy.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "config": policy_cfg,
+                    },
+                    checkpoint_path,
+                )
 
         avg_loss = running_loss / step
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
         if cfg.wandb_use:
             wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=global_step)
-
-        checkpoint_path = save_dir / f"policy_epoch_{epoch+1:03d}.pt"
-        torch.save(
-            {
-                "epoch": epoch + 1,
-                "model_state_dict": policy.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "config": policy_cfg,
-            },
-            checkpoint_path,
-        )
 
         _log_qualitative_samples(policy, cfg, global_step, device)
 

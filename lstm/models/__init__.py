@@ -1,3 +1,3 @@
-from .sketch_rnn import SketchRNN, SketchRNNConfig
+from lstm.models.sketch_rnn import SketchRNN, SketchRNNConfig
 
 __all__ = ["SketchRNN", "SketchRNNConfig"]

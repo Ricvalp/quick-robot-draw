@@ -79,7 +79,7 @@ class SketchRNN(nn.Module):
 
         self.encoder = nn.LSTM(
             input_size=cfg.input_dim,
-            hidden_size=cfg.encoder_hidden_size,
+            hidden_size=cfg.encoder_hidden,
             num_layers=cfg.encoder_num_layers,
             bidirectional=True,
             batch_first=True,
@@ -87,21 +87,21 @@ class SketchRNN(nn.Module):
         )
         self.decoder = nn.LSTM(
             input_size=cfg.input_dim + cfg.latent_dim,
-            hidden_size=cfg.decoder_hidden_size,
+            hidden_size=cfg.decoder_hidden,
             num_layers=cfg.decoder_num_layers,
             batch_first=True,
             dropout=dec_dropout,
         )
 
-        self.fc_mu = nn.Linear(2 * cfg.encoder_hidden_size, cfg.latent_dim)
-        self.fc_logvar = nn.Linear(2 * cfg.encoder_hidden_size, cfg.latent_dim)
+        self.fc_mu = nn.Linear(2 * cfg.encoder_hidden, cfg.latent_dim)
+        self.fc_logvar = nn.Linear(2 * cfg.encoder_hidden, cfg.latent_dim)
         self.latent_to_hidden = nn.Linear(
-            cfg.latent_dim, cfg.decoder_hidden_size * cfg.decoder_num_layers
+            cfg.latent_dim, cfg.decoder_hidden * cfg.decoder_num_layers
         )
         self.latent_to_cell = nn.Linear(
-            cfg.latent_dim, cfg.decoder_hidden_size * cfg.decoder_num_layers
+            cfg.latent_dim, cfg.decoder_hidden * cfg.decoder_num_layers
         )
-        self.mdn_head = MixtureDensityHead(cfg.decoder_hidden_size, cfg.num_mixtures)
+        self.mdn_head = MixtureDensityHead(cfg.decoder_hidden, cfg.num_mixtures)
 
     def encode(
         self, strokes: torch.Tensor, lengths: torch.Tensor
@@ -126,10 +126,10 @@ class SketchRNN(nn.Module):
     def _init_decoder_state(self, z: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         batch = z.shape[0]
         hidden = self.latent_to_hidden(z).view(
-            batch, self.cfg.decoder_num_layers, self.cfg.decoder_hidden_size
+            batch, self.cfg.decoder_num_layers, self.cfg.decoder_hidden
         )
         cell = self.latent_to_cell(z).view(
-            batch, self.cfg.decoder_num_layers, self.cfg.decoder_hidden_size
+            batch, self.cfg.decoder_num_layers, self.cfg.decoder_hidden
         )
         hidden = hidden.permute(1, 0, 2).contiguous()
         cell = cell.permute(1, 0, 2).contiguous()

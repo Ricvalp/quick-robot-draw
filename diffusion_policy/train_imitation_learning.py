@@ -187,7 +187,7 @@ def main(_) -> None:
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
             
             if global_step % cfg.save_checkpoint_every == 0:
-                checkpoint_path = save_dir / f"policy_epoch_{epoch+1:03d}.pt"
+                checkpoint_path = save_dir / f"policy_epoch_{global_step:06d}.pt"
                 torch.save(
                     {
                         "epoch": epoch + 1,

@@ -85,16 +85,17 @@
             "name": "Train QuickDraw LSTM",
             "type": "debugpy",
             "request": "launch",
-            "program": "lstm/train_quickdraw.py",
+            "program": "lstm/train_imitation_learning.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "."
             },
             "args": [
-                "--data-root", "data/",
-                "--num-workers", "1",
-                // "--wandb-project", "quickdraw-diffusion"
+                "--config=lstm/configs/imitation_learning.py",
+                "--config.data_root=data/single_class/eyeglasses/",
+                "--config.num_workers=0",
+                "--config.eval_interval=100"
             ]
         },
         {

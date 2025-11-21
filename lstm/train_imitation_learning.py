@@ -48,7 +48,7 @@ def compute_kl_weight(step: int, cfg: argparse.Namespace) -> float:
 def _log_eval_samples(
     model: SketchRNN, cfg: argparse.Namespace, step: int, device: torch.device
 ) -> None:
-    if cfg.wandb_project is None or cfg.eval_samples <= 0:
+    if not cfg.wandb_logging.use or cfg.eval_samples <= 0:
         return
 
     generator = torch.Generator(device=device)

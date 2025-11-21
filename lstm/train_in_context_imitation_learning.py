@@ -22,7 +22,7 @@ from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_
 
 
 _CONFIG_FILE = config_flags.DEFINE_config_file(
-    "config", default="lstm/configs/imitation_learning.py"
+    "config", default="lstm/configs/in_context_imitation_learning.py"
 )
 
 

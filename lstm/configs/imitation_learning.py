@@ -9,7 +9,7 @@ def get_config() -> ConfigDict:
     cfg.data_root = config_dict.placeholder(str)
     cfg.split = "train"
     cfg.backend = "lmdb"
-    cfg.K = 5
+    cfg.K = 1
     cfg.batch_size = 64
     cfg.epochs = 100
     cfg.lr = 1e-3
@@ -26,8 +26,8 @@ def get_config() -> ConfigDict:
     cfg.num_mixtures = 20
     cfg.dropout = 0.0
     cfg.kl_start = 0.0
-    cfg.kl_end = 1.0
-    cfg.kl_anneal_steps = 10000
+    cfg.kl_end = 2.0
+    cfg.kl_anneal_steps = 20000
     cfg.grad_clip = 1.0
     cfg.checkpoint_dir = "lstm/checkpoints"
     cfg.save_interval = 10000

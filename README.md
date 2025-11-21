@@ -2,6 +2,12 @@
 
 **Quick, Robot, Draw!** turns Google’s Quick, Draw! sketches into normalized sequence data ready for *in-context* imitation learning with transformer-based diffusion policies, state-space models, and other sequence learners. The pipeline ingests the official `.ndjson` or `.bin` releases, preprocesses every sketch into absolute and delta trajectories with pen-state channels, assembles configurable K-shot prompt/query episodes, and stores everything in efficient backends with PyTorch-friendly loaders.
 
+### A cat and a basketbal drawn by a diffusion policy
+
+<p>
+  <img src="figures/readme/sample_002.gif" width="320" alt="A cat">
+  <img src="figures/readme/sample_005.gif" width="320" alt="A basketball">
+</p>
 ---
 
 ## The Dataset
@@ -85,6 +91,8 @@ This will:
 6. Optionally prebuild episodes (`num_prebuilt_episodes`) inside `data/episodes/`.
 
 Use `--force` to rebuild even if a manifest already exists, and `--max-files` to process only the first *N* raw files on a pass.
+
+![Generated sketches](figures/generated_samples.gif)
 
 ---
 
@@ -219,7 +227,33 @@ The preprocessing + episode builder stack only assumes `"family_id"` and a list 
 
 ---
 
-## 10. License & attribution
+# Training policies
+
+You can train both a BiLSTM (SketchRNN) baseline and a DiT diffusion policy on:
+- **Unconditional single-class generation:** train on one category (set `families` in `config/data_config.yaml` and `K=0` to drop prompts).
+- **Multi-class in-context imitation learning:** train on episodes with prompts + query across all families (default `K>0`).
+
+### BiLSTM (SketchRNN)
+
+Unconditional / single-class generation (set `families` in the data config and `K=0`):
+```bash
+PYTHONPATH=. python lstm/train_imitation_learning.py \
+  --config lstm/configs/imitation_learning.py \
+  --config.data_root data/ \
+  --config.K 1 \
+```
+
+### DiT Diffusion Policy
+Unconditional / single-class generation (set `families` in the data config and `K=0`):
+```bash
+PYTHONPATH=. python diffusion_policy/train_imitation_learning.py \
+  --config diffusion_policy/configs/imitation_learning.py \
+  --config.data_root data/ \
+  --config.K 1 \
+```
+
+
+## License & attribution
 
 - The Quick, Draw! dataset is © Google, released under the [Creative Commons Attribution 4.0 license](https://creativecommons.org/licenses/by/4.0/)—review their [terms](https://github.com/googlecreativelab/quickdraw-dataset#license) before redistribution.
 - The tooling in **Quick, Robot, Draw!** is provided under the same license as this repository (see `LICENSE`).

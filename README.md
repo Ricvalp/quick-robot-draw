@@ -5,8 +5,8 @@
 ### A cat and a basketbal drawn by a diffusion policy
 
 <p>
-  <img src="figures/readme/sample_002.gif" width="320" alt="A cat">
-  <img src="figures/readme/sample_005.gif" width="320" alt="A basketball">
+  <img src="readme/sample_002.gif" width="320" alt="A cat">
+  <img src="readme/sample_005.gif" width="320" alt="A basketball">
 </p>
 ---
 

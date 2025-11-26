@@ -1,17 +1,14 @@
-import os
 import io
+import os
+
 import torch
 import webdataset as wds
-from tqdm import tqdm
 import yaml
-
 from ml_collections import config_flags
+from tqdm import tqdm
 
-from glob import glob
-from torch.utils.data import DataLoader
-
-from fid import EpisodeToImage
 from dataset import QuickDrawEpisodes, RasterizerConfig
+from fid import EpisodeToImage
 
 
 def write_shards(

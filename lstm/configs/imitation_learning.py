@@ -13,7 +13,7 @@ def get_config() -> ConfigDict:
     cfg.batch_size = 64
     cfg.epochs = 100
     cfg.lr = 1e-3
-    cfg.input_dim=5
+    cfg.input_dim = 5
     cfg.weight_decay = 0.0
     cfg.num_workers = 16
     cfg.max_seq_len = 512

@@ -16,13 +16,14 @@ import sys
 import time
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
-from functools import partial
 from typing import Dict, Iterable, Iterator, List, Optional
 
 import numpy as np
 import yaml
 
+from dataset.episode_builder import EpisodeBuilder
 from dataset.preprocess import (
+    ProcessedSketch,
     QuickDrawPreprocessor,
     RawSketch,
     load_binary_sketches,
@@ -35,8 +36,6 @@ from dataset.storage import (
     StorageConfig,
     hash_config,
 )
-from dataset.episode_builder import EpisodeBuilder
-from dataset.preprocess import ProcessedSketch
 
 try:
     from tqdm import tqdm

@@ -4,7 +4,7 @@ Visualisation utilities for inspecting QuickDraw sketches and episodes.
 
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np

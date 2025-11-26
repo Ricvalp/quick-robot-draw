@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -208,7 +208,7 @@ class DiTDiffusionPolicy(nn.Module):
         context = observation.get("points")
         if context is None:
             context = observation.get("context")
-            
+
         if context is None:
             context = points
         if context is None:

@@ -7,23 +7,22 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from ml_collections import config_flags
 
 import torch
+from ml_collections import config_flags
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+
 import wandb
-
-
 from dataset.loader import QuickDrawEpisodes
 from dataset.lstm import LSTMCollator
 from diffusion_policy.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
 
-
 _CONFIG_FILE = config_flags.DEFINE_config_file(
     "config", default="lstm/configs/imitation_learning.py"
 )
+
 
 def load_cfgs(
     _CONFIG_FILE,
@@ -127,8 +126,9 @@ def main(_) -> None:
     print(f"Model parameter count: {total_params:,}")
 
     if cfg.profile:
-        from torch.profiler import profile, ProfilerActivity
         import os
+
+        from torch.profiler import ProfilerActivity, profile
 
         os.makedirs(cfg.trace_dir, exist_ok=True)
 
@@ -155,7 +155,7 @@ def main(_) -> None:
 
                 if step > 3:
                     break
-        prof.export_chrome_trace(cfg.trace_dir + f"lstm_trace.json")
+        prof.export_chrome_trace(cfg.trace_dir + "lstm_trace.json")
         print(f"Saved profiling trace to {cfg.trace_dir}lstm_trace.json")
         return
 
@@ -207,7 +207,7 @@ def main(_) -> None:
                     },
                     step=global_step,
                 )
-                
+
             if (
                 cfg.save_interval is not None
                 and global_step % max(1, cfg.save_interval) == 0
@@ -229,7 +229,6 @@ def main(_) -> None:
             ):
                 _log_eval_samples(model, cfg, global_step, device)
 
-
         if batches == 0:
             raise RuntimeError(
                 "No valid batches processed; consider reducing max_seq_len or batch size."
@@ -240,8 +239,6 @@ def main(_) -> None:
 
         if cfg.wandb_logging.use:
             wandb.log({"train/loss": avg_loss, "epoch": epoch + 1})
-
-
 
     if cfg.wandb_project:
         wandb.finish()

@@ -1,7 +1,8 @@
-import torch
-from torch import nn
-from ml_collections import config_flags
 from pathlib import Path
+
+import torch
+from ml_collections import config_flags
+from torch import nn
 from tqdm import tqdm
 
 try:
@@ -11,8 +12,7 @@ except ImportError:
 
 from torchvision.models import resnet18
 
-from fid import get_cached_loader, ResNet18FeatureExtractor
-
+from fid import get_cached_loader
 
 _CONFIG_FILE = config_flags.DEFINE_config_file("config", default="fid/configs/train.py")
 

@@ -5,16 +5,14 @@ Sample sketches from a trained SketchRNN checkpoint.
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from typing import Optional, Tuple
-from ml_collections import ConfigDict, config_flags
 
 import torch
+from ml_collections import ConfigDict, config_flags
 
 from diffusion_policy.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
-
 
 # def parse_args() -> argparse.Namespace:
 #     parser = argparse.ArgumentParser(description="Sample sketches from a SketchRNN checkpoint.")

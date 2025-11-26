@@ -1,11 +1,11 @@
 from pathlib import Path
 from typing import Union
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18
 from scipy import linalg
-import numpy as np
+from torchvision.models import resnet18
 
 __all__ = [
     "ResNet18FeatureExtractor",

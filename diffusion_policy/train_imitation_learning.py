@@ -7,26 +7,26 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Dict
-from ml_collections import ConfigDict, config_flags
-
-import torch
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
-import wandb
 
 import matplotlib
+import torch
+from ml_collections import ConfigDict, config_flags
+from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
+
+import wandb
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from dataset.diffusion import DiffusionCollator
+from dataset.loader import QuickDrawEpisodes
 from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
 from diffusion_policy.sampling import (
     make_start_token,
     sample_quickdraw_tokens_unconditional,
     tokens_to_figure,
 )
-from dataset.loader import QuickDrawEpisodes
-from dataset.diffusion import DiffusionCollator
 
 
 def load_config(_CONFIG_FILE: str) -> ConfigDict:
@@ -35,10 +35,12 @@ def load_config(_CONFIG_FILE: str) -> ConfigDict:
 
     return cfg
 
+
 def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
 
 def _log_qualitative_samples(
     policy: DiTDiffusionPolicy,
@@ -160,7 +162,7 @@ def main(_) -> None:
     for epoch in range(cfg.epochs):
         policy.train()
         running_loss = 0.0
-        step = 0 
+        step = 0
         progress = tqdm(dataloader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False)
         for batch in progress:
 
@@ -185,7 +187,7 @@ def main(_) -> None:
                 and global_step % cfg.loss_log_every == 0
             ):
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
-            
+
             if global_step % cfg.save_checkpoint_every == 0:
                 checkpoint_path = save_dir / f"policy_epoch_{global_step:06d}.pt"
                 torch.save(

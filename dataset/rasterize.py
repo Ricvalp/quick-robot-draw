@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 import numpy as np
-
-from .preprocess import ProcessedSketch
 
 try:  # Pillow is optional until rasterisation is used.
     from PIL import Image, ImageDraw

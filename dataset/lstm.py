@@ -7,14 +7,6 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 import torch
-from torch.utils.data import DataLoader
-
-import webdataset as wds
-import torch
-import os
-from glob import glob
-import io
-import tqdm
 
 __all__ = ["LSTMCollator"]
 

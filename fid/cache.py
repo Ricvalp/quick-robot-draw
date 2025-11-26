@@ -1,9 +1,9 @@
-from typing import List, Dict
 import io
-import numpy as np
+from glob import glob
+from typing import Dict
+
 import torch
 import webdataset as wds
-from glob import glob
 from torch.utils.data import DataLoader
 
 from dataset import rasterize_absolute_points

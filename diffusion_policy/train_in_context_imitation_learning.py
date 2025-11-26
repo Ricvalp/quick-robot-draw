@@ -5,20 +5,22 @@ Train a DiT-based diffusion policy on QuickDraw episodes using the existing data
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
-from typing import Dict
-from ml_collections import ConfigDict, config_flags
 
 import torch
+from ml_collections import ConfigDict, config_flags
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-import wandb
 
-from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion_policy.sampling import InContextDiffusionCollatorEval, sample_quickdraw_tokens, tokens_to_figure
-from dataset.loader import QuickDrawEpisodes
+import wandb
 from dataset.diffusion import InContextDiffusionCollator
+from dataset.loader import QuickDrawEpisodes
+from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
+from diffusion_policy.sampling import (
+    InContextDiffusionCollatorEval,
+    sample_quickdraw_tokens,
+    tokens_to_figure,
+)
 
 
 def load_config(_CONFIG_FILE: str) -> ConfigDict:
@@ -105,7 +107,7 @@ def main(_) -> None:
         drop_last=True,
         collate_fn=collator,
     )
-    
+
     eval_collator = InContextDiffusionCollatorEval()
     eval_dataloader = DataLoader(
         dataset,
@@ -113,7 +115,7 @@ def main(_) -> None:
         shuffle=True,
         collate_fn=eval_collator,
     )
-    
+
     noise_scheduler_kwargs = {
         "num_train_timesteps": cfg.num_train_timesteps,
         "beta_start": cfg.beta_start,
@@ -200,10 +202,9 @@ def main(_) -> None:
                         cfg=cfg,
                         step=global_step,
                         device=device,
-                        )
+                    )
                 except StopIteration as err:
-                    print("WARNING:" , err)
-
+                    print("WARNING:", err)
 
         avg_loss = running_loss / step
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")

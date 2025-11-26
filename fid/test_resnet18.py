@@ -1,9 +1,10 @@
-from ml_collections import ConfigDict, config_flags
+from pathlib import Path
+
+import numpy as np
 import torch
+from ml_collections import ConfigDict, config_flags
 from sklearn.manifold import TSNE
 from tqdm import tqdm
-from pathlib import Path
-import numpy as np
 
 from fid import get_cached_loader
 from fid.fid_resnet18 import ResNet18FeatureExtractor, compute_fid
@@ -61,7 +62,7 @@ def main(_):
 
     plt.figure(figsize=(10, 10))
     plt.title(f"ResNet18 Feature TSNE on Validation Set: dim={all_features.shape[1]}")
-    scatter = plt.scatter(
+    plt.scatter(
         tsne_results[:, 0],
         tsne_results[:, 1],
         c=labels.numpy(),

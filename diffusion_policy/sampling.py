@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from io import BytesIO
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -13,11 +13,10 @@ __all__ = [
     "InContextDiffusionCollatorEval",
     "make_start_token",
     "sample_quickdraw_tokens",
-    "sample_quickdraw_tokens_unconditinoal",
+    "sample_quickdraw_tokens_unconditional",
     "tokens_to_figure",
     "tokens_to_gif",
 ]
-
 
 
 class InContextDiffusionCollatorEval:
@@ -50,7 +49,6 @@ class InContextDiffusionCollatorEval:
             mask[idx, -points_len:] = True
 
         return {"points": points, "mask": mask}
-
 
 
 def make_start_token(
@@ -117,7 +115,7 @@ def sample_quickdraw_tokens(
     device = next(policy.parameters()).device
     feature_dim = policy.cfg.point_feature_dim
 
-    if context['points'].shape[-1] != feature_dim:
+    if context["points"].shape[-1] != feature_dim:
         raise ValueError(
             f"start_token feature dim {context['points'].shape[-1]} != {feature_dim}."
         )
@@ -132,8 +130,10 @@ def sample_quickdraw_tokens(
         actions = policy.sample_actions(observation=context, generator=generator)
         samples.append(actions)
         context = {
-            'points': torch.cat([context['points'], actions], dim=1),
-            'mask': torch.cat([context['mask'], torch.ones(actions.shape[:2]).to(device)], dim=1)
+            "points": torch.cat([context["points"], actions], dim=1),
+            "mask": torch.cat(
+                [context["mask"], torch.ones(actions.shape[:2]).to(device)], dim=1
+            ),
         }
 
     generated = torch.cat(samples, dim=1)

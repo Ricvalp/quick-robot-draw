@@ -7,19 +7,17 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from ml_collections import config_flags
 
 import torch
+from ml_collections import config_flags
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+
 import wandb
-
-
 from dataset.loader import QuickDrawEpisodes
 from dataset.lstm import LSTMCollator
 from diffusion_policy.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
-
 
 _CONFIG_FILE = config_flags.DEFINE_config_file(
     "config", default="lstm/configs/in_context_imitation_learning.py"
@@ -128,8 +126,9 @@ def main() -> None:
     print(f"Model parameter count: {total_params:,}")
 
     if cfg.profile:
-        from torch.profiler import profile, ProfilerActivity
         import os
+
+        from torch.profiler import ProfilerActivity, profile
 
         os.makedirs(cfg.trace_dir, exist_ok=True)
 
@@ -156,7 +155,7 @@ def main() -> None:
 
                 if step > 3:
                     break
-        prof.export_chrome_trace(cfg.trace_dir + f"lstm_trace.json")
+        prof.export_chrome_trace(cfg.trace_dir + "lstm_trace.json")
         print(f"Saved profiling trace to {cfg.trace_dir}lstm_trace.json")
         return
 

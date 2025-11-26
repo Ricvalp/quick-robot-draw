@@ -29,7 +29,7 @@ def get_config() -> ConfigDict:
     cfg.num_inference_steps = 50
     cfg.checkpoint_dir = "diffusion_policy/checkpoints"
     cfg.save_checkpoint_every = 1000
-    cfg.wandb_use=True
+    cfg.wandb_use = True
     cfg.wandb_project = "in-context imitation learning diffusion"
     cfg.wandb_entity = "ricvalp"
     cfg.loss_log_every = 10

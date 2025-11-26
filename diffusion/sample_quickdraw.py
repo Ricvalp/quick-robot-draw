@@ -9,8 +9,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import torch
 
-from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion_policy.sampling import (
+from diffusion import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
+from diffusion.sampling import (
     make_start_token,
     sample_quickdraw_tokens,
     tokens_to_figure,

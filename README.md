@@ -105,9 +105,9 @@ Each episode contains `K` prompt sketches and one query sketch sampled from the 
  START, query, STOP]
 ```
 
-![Example Sketches](example_sketches.png)
+![Example Sketches](readme/example_sketches.png)
 
-![Episode Tokens](example_tokens.png)
+![Episode Tokens](readme/example_tokens.png)
 
 Tokens are float vectors of width 7:
 

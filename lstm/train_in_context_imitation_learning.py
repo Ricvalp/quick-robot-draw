@@ -16,7 +16,7 @@ from tqdm.auto import tqdm
 import wandb
 from dataset.loader import QuickDrawEpisodes
 from dataset.lstm import LSTMCollator
-from diffusion_policy.sampling import tokens_to_figure
+from diffusion.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
 
 _CONFIG_FILE = config_flags.DEFINE_config_file(

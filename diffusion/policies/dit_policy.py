@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
-from diffusion_policy.models.dit import DiffusionTransformer, DiffusionTransformerConfig
+from diffusion.models.dit import DiffusionTransformer, DiffusionTransformerConfig
 
 
 class SinusoidalTimeEmbedding(nn.Module):

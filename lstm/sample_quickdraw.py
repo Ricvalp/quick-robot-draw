@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 import torch
 from ml_collections import ConfigDict, config_flags
 
-from diffusion_policy.sampling import tokens_to_figure
+from diffusion.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
 
 # def parse_args() -> argparse.Namespace:

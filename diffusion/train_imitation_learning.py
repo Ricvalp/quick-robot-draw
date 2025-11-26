@@ -21,8 +21,8 @@ import matplotlib.pyplot as plt
 
 from dataset.diffusion import DiffusionCollator
 from dataset.loader import QuickDrawEpisodes
-from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion_policy.sampling import (
+from diffusion import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
+from diffusion.sampling import (
     make_start_token,
     sample_quickdraw_tokens_unconditional,
     tokens_to_figure,

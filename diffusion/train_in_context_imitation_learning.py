@@ -15,8 +15,8 @@ from tqdm.auto import tqdm
 import wandb
 from dataset.diffusion import InContextDiffusionCollator
 from dataset.loader import QuickDrawEpisodes
-from diffusion_policy import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion_policy.sampling import (
+from diffusion import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
+from diffusion.sampling import (
     InContextDiffusionCollatorEval,
     sample_quickdraw_tokens,
     tokens_to_figure,

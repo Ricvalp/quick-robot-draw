@@ -127,6 +127,10 @@ def main(_) -> None:
         dropout=cfg.dropout,
     )
     model = SketchRNN(cfg).to(device)
+    model = torch.compile(
+        model, mode="max-autotune", dynamic=True
+    )  # or "max-autotune" on CUDA
+
     optimizer = torch.optim.Adam(
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
     )
@@ -154,6 +158,7 @@ def main(_) -> None:
 
                 optimizer.zero_grad(set_to_none=True)
                 kl_weight = compute_kl_weight(step, cfg)
+
                 loss, metrics = model.compute_loss(
                     strokes, lengths, kl_weight=kl_weight
                 )
@@ -164,6 +169,8 @@ def main(_) -> None:
                     model.parameters(), max_norm=cfg.grad_clip
                 )
                 optimizer.step()
+
+                prof.step()
 
                 if step > 3:
                     break

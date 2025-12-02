@@ -8,7 +8,6 @@ Example usage:
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import os
@@ -19,7 +18,7 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Dict, Iterable, Iterator, List, Optional
 
 import numpy as np
-import yaml
+from ml_collections import config_flags
 
 from dataset.episode_builder import EpisodeBuilder
 from dataset.preprocess import (
@@ -102,40 +101,9 @@ def progress_iterable(iterable, *, desc: str, unit: str):
     return SimpleProgressBar(iterable, desc=desc, unit=unit)
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse CLI arguments for the dataset build script.
-
-    Returns the populated `argparse.Namespace` consumed by `main()`.
-    """
-    parser = argparse.ArgumentParser(description="Build QuickDraw dataset cache.")
-    parser.add_argument("--config", required=True, help="Path to YAML config file.")
-    parser.add_argument(
-        "--num-workers",
-        type=int,
-        default=0,
-        help="Number of worker processes for preprocessing.",
-    )
-    parser.add_argument(
-        "--max-files",
-        type=int,
-        default=None,
-        help="Optional cap on number of raw files to process (for debugging).",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Force rebuild, ignoring manifest cache.",
-    )
-    return parser.parse_args()
-
-
-def load_config(path: str) -> Dict[str, object]:
-    """Load a YAML configuration file into a Python dictionary.
-
-    Raises FileNotFoundError if the user-supplied path cannot be opened.
-    """
-    with open(path, "r", encoding="utf-8") as handle:
-        return yaml.safe_load(handle)
+def load_cfgs(_CONFIG_FILE) -> Dict:
+    cfg = _CONFIG_FILE.value
+    return cfg
 
 
 def _normalize_families_filter(value) -> Optional[List[str]]:
@@ -467,13 +435,31 @@ def prebuild_episodes(
     return stored
 
 
-def main() -> None:
-    """Entry point for the dataset build CLI.
+_CONFIG_FILE = config_flags.DEFINE_config_file(
+    "config", default="configs/dataset/build_dataset.py"
+)
 
+
+def main(_) -> None:
+    """
     Coordinates preprocessing, manifest writing, and optional episode caching.
     """
-    args = parse_args()
-    config = load_config(args.config)
+    config = load_cfgs(_CONFIG_FILE)
+
+    def _plain(obj):
+        if hasattr(obj, "to_dict"):
+            return obj.to_dict()
+        if isinstance(obj, dict):
+            return {k: _plain(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            t = type(obj)
+            return t(_plain(v) for v in obj)
+        return obj
+
+    config_plain = _plain(config)
+
+    config_hash = hash_config(config_plain)
+
     storage_root = config.get("root", "data/")
     os.makedirs(storage_root, exist_ok=True)
     backend = config.get("backend", "lmdb")
@@ -487,17 +473,6 @@ def main() -> None:
     )
 
     manifest_path = os.path.join(storage_root, "DatasetManifest.json")
-    config_hash = hash_config(config)
-
-    if (
-        os.path.exists(manifest_path)
-        and not args.force
-        and not config.get("rebuild", False)
-    ):
-        manifest = DatasetManifest.load(manifest_path)
-        if manifest.config_hash == config_hash:
-            print("Dataset already up-to-date. Use --force to rebuild.")
-            return
 
     raw_root = config.get("raw_root")
     if raw_root is None or not os.path.exists(raw_root):
@@ -509,7 +484,7 @@ def main() -> None:
 
     raw_files = discover_raw_files(
         raw_root,
-        limit=args.max_files,
+        limit=config.max_files,
         allowed_families=family_filter,
     )
     if not raw_files:
@@ -522,6 +497,8 @@ def main() -> None:
         "resample_points": config.get("resample", {}).get("points"),
         "resample_spacing": config.get("resample", {}).get("spacing"),
         "keep_zero_length": config.get("resample", {}).get("keep_zero_length", True),
+        "simplify_enabled": config.get("simplify", {}).get("enabled", False),
+        "simplify_epsilon": config.get("simplify", {}).get("epsilon", 2.0),
     }
 
     sketch_storage = SketchStorage(storage_config, mode="w")
@@ -533,7 +510,7 @@ def main() -> None:
         raw_files=raw_files,
         storage=sketch_storage,
         preprocessor_kwargs=preprocessor_kwargs,
-        num_workers=args.num_workers,
+        num_workers=config.num_workers,
         max_sketches_per_file=max_sketches_per_file,
         seed=int(config.get("seed", 0)),
     )
@@ -559,7 +536,7 @@ def main() -> None:
         sketch_counts=counts,
         total_sketches=sum(counts.values()),
         total_episodes=0,
-        config={**config, "family_split_map": split_map},
+        config={**config_plain, "family_split_map": split_map},
         normalization=summary["normalization"],
     )
 
@@ -584,4 +561,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    from absl import app
+
+    app.run(main)

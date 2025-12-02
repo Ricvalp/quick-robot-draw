@@ -8,19 +8,24 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import matplotlib
 import torch
 from ml_collections import config_flags
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
+
 import wandb
 from dataset.loader import QuickDrawEpisodes
-from dataset.lstm import LSTMCollator
+from dataset.lstm import SketchRNNCollator
 from diffusion.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
 
 _CONFIG_FILE = config_flags.DEFINE_config_file(
-    "config", default="lstm/configs/imitation_learning.py"
+    "config", default="/configs/lstm/imitation_learning.py"
 )
 
 
@@ -50,6 +55,9 @@ def _log_eval_samples(
     if not cfg.wandb_logging.use or cfg.eval_samples <= 0:
         return
 
+    prev_mode = model.training
+    model.eval()
+
     generator = torch.Generator(device=device)
     generator.manual_seed(cfg.eval_seed + step)
     samples = model.sample(
@@ -61,8 +69,6 @@ def _log_eval_samples(
     )
     trimmed = trim_strokes_to_eos(samples)
 
-    import matplotlib.pyplot as plt
-
     images = []
     for idx, seq in enumerate(trimmed):
         tokens = strokes_to_tokens(seq)
@@ -71,6 +77,9 @@ def _log_eval_samples(
         plt.close(fig)
     if images:
         wandb.log({"samples/sketches": images}, step=step + 1)
+
+    if prev_mode:
+        model.train()
 
 
 def main(_) -> None:
@@ -90,7 +99,10 @@ def main(_) -> None:
         seed=cfg.seed,
         coordinate_mode=cfg.coordinate_mode,
     )
-    collator = LSTMCollator(max_seq_len=cfg.max_seq_len)
+    # collator = LSTMCollator(max_seq_len=cfg.max_seq_len)
+
+    max_seq_len = 220  # max(len(sample["tokens"]) for sample in dataset)
+    collator = SketchRNNCollator(max_seq_len=max_seq_len)
 
     dataloader = DataLoader(
         dataset,
@@ -100,8 +112,8 @@ def main(_) -> None:
         pin_memory=True,
         drop_last=True,
         collate_fn=collator,
-        # prefetch_factor=4,
-        # persistent_workers=True,
+        prefetch_factor=4,
+        persistent_workers=True,
     )
 
     sketch_config = SketchRNNConfig(

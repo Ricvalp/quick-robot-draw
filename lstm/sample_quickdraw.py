@@ -14,18 +14,9 @@ from ml_collections import ConfigDict, config_flags
 from diffusion.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
 
-# def parse_args() -> argparse.Namespace:
-#     parser = argparse.ArgumentParser(description="Sample sketches from a SketchRNN checkpoint.")
-#     parser.add_argument("--checkpoint", type=str, required=True, help="Path to the .pt checkpoint.")
-#     parser.add_argument("--num-samples", type=int, default=8, help="Number of sketches to draw.")
-#     parser.add_argument("--steps", type=int, default=256, help="Maximum decoding steps per sketch.")
-#     parser.add_argument("--temperature", type=float, default=0.65, help="Sampling temperature.")
-#     parser.add_argument("--greedy", action="store_true", help="Use greedy decoding for mixture + pen states.")
-#     parser.add_argument("--device", type=str, default="cpu", help="Device for sampling.")
-#     parser.add_argument("--seed", type=int, default=7, help="Random seed for sampling noise.")
-#     parser.add_argument("--output-dir", type=str, default="samples", help="Directory to store PNGs.")
-#     parser.add_argument("--prefix", type=str, default="sketch", help="Filename prefix for saved samples.")
-#     return parser.parse_args()
+_CONFIG_FILE = config_flags.DEFINE_config_file(
+    "config", default="configs/lstm/sample.py"
+)
 
 
 def load_config(_CONFIG_FILE: str) -> ConfigDict:

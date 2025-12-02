@@ -92,10 +92,11 @@
                 "PYTHONPATH": "."
             },
             "args": [
-                "--config=lstm/configs/imitation_learning.py",
-                "--config.data_root=data/single_class/eyeglasses/",
+                "--config=configs/lstm/imitation_learning.py",
+                "--config.data_root=data/single_class/eyeglasses-simplified/",
                 "--config.num_workers=0",
-                "--config.eval_interval=100"
+                "--config.eval_interval=100",
+                "--config.K=0"
             ]
         },
         {

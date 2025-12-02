@@ -112,12 +112,16 @@ class QuickDrawPreprocessor:
         resample_points: Optional[int] = None,
         resample_spacing: Optional[float] = None,
         keep_zero_length: bool = True,
+        simplify_enabled: bool = False,
+        simplify_epsilon: float = 2.0,
         dtype: np.dtype = np.float32,
     ) -> None:
         self.normalize = normalize
         self.resample_points = resample_points
         self.resample_spacing = resample_spacing
         self.keep_zero_length = keep_zero_length
+        self.simplify_enabled = simplify_enabled
+        self.simplify_epsilon = simplify_epsilon
         self.dtype = dtype
 
     # --------------------------------------------------------------------- #
@@ -185,6 +189,8 @@ class QuickDrawPreprocessor:
             unique = np.unique(stroke, axis=1)
             if unique.shape[1] < 2 and not self.keep_zero_length:
                 continue
+            if self.simplify_enabled:
+                stroke = self.rdp_stroke(stroke, self.simplify_epsilon)
             resampled = self._resample_stroke(stroke)
             prepared.append(resampled)
         return prepared
@@ -295,6 +301,45 @@ class QuickDrawPreprocessor:
             json.dumps(metadata, sort_keys=True).encode("utf-8")
         ).hexdigest()
         return digest
+
+    @staticmethod
+    def rdp_stroke(stroke: np.ndarray, epsilon: float) -> np.ndarray:
+        """
+        Simplify a single stroke (shape [2, N]) with Ramer–Douglas–Peucker.
+        Keeps endpoints; returns a new array with the same dtype.
+        """
+        if stroke.shape[1] <= 2 or epsilon <= 0:
+            return stroke.astype(stroke.dtype, copy=True)
+
+        points = stroke.T  # (N, 2)
+        keep = {0, len(points) - 1}
+
+        def point_segment_dist(pt, a, b) -> float:
+            seg = b - a
+            seg_len_sq = np.dot(seg, seg)
+            if seg_len_sq == 0.0:
+                return float(np.linalg.norm(pt - a))
+            return float(abs(np.cross(seg, pt - a)) / np.sqrt(seg_len_sq))
+
+        stack = [(0, len(points) - 1)]
+        while stack:
+            start, end = stack.pop()
+            if end <= start + 1:
+                continue
+            a, b = points[start], points[end]
+            dmax = -1.0
+            idx = None
+            for i in range(start + 1, end):
+                d = point_segment_dist(points[i], a, b)
+                if d > dmax:
+                    dmax, idx = d, i
+            if dmax > epsilon and idx is not None:
+                keep.add(idx)
+                stack.append((start, idx))
+                stack.append((idx, end))
+
+        keep_idx = sorted(keep)
+        return points[keep_idx].T.astype(stroke.dtype, copy=False)
 
 
 # --------------------------------------------------------------------------- #

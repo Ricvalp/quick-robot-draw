@@ -199,7 +199,7 @@ def tokens_to_figure(
 
     ax.set_aspect("equal")
     ax.invert_yaxis()
-    ax.axis("off")
+    # ax.axis("off")
     fig.tight_layout()
     return fig
 

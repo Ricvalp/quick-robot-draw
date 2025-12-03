@@ -6,20 +6,22 @@ def get_config() -> ConfigDict:
     cfg = ConfigDict()
     cfg.seed = 2024
     cfg.data_root = config_dict.placeholder(str)
+    cfg.device = "cuda"  # or "cpu"
     cfg.split = "train"
     cfg.backend = "lmdb"
-    cfg.K = 5
+    cfg.K = 4
     cfg.batch_size = 64
     cfg.epochs = 100
     cfg.lr = 1e-3
+    cfg.input_dim = 7
     cfg.weight_decay = 0.0
     cfg.num_workers = 16
     cfg.max_seq_len = 512
     cfg.coordinate_mode = "delta"
     cfg.encoder_hidden = 256
-    cfg.encoder_layers = 1
+    cfg.encoder_num_layers = 1
     cfg.decoder_hidden = 512
-    cfg.decoder_layers = 1
+    cfg.decoder_num_layers = 1
     cfg.latent_dim = 128
     cfg.num_mixtures = 20
     cfg.dropout = 0.0
@@ -38,12 +40,12 @@ def get_config() -> ConfigDict:
     cfg.profile = False
     cfg.trace_dir = "profiling/lstm/"
 
-    cfg.wandb_logging = ConfigDict()
-    cfg.wandb_logging.use = False
-    cfg.wandb_logging.project = "lstm-imitation-learning"
-    cfg.wandb_logging.entity = "your_entity"
-    cfg.wandb_logging.run = None
-    cfg.wandb_logging.log_interval = 200
-    cfg.wandb_logging.log_all = False
+    cfg.wandb = ConfigDict()
+    cfg.wandb.use = False
+    cfg.wandb.project = "lstm-imitation-learning"
+    cfg.wandb.entity = "your_entity"
+    cfg.wandb.run = None
+    cfg.wandb.log_interval = 200
+    cfg.wandb.log_all = False
 
     return cfg

@@ -9,3 +9,5 @@ samples/
 profiling/
 *.pyc
 *__pycache__/
+
+.ruff_cache/

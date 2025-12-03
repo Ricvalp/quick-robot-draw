@@ -15,7 +15,7 @@ from tqdm.auto import tqdm
 
 import wandb
 from dataset.loader import QuickDrawEpisodes
-from dataset.lstm import LSTMCollator
+from dataset.lstm import InContextSketchRNNCollator
 from diffusion.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
 
@@ -47,8 +47,11 @@ def compute_kl_weight(step: int, cfg: argparse.Namespace) -> float:
 def _log_eval_samples(
     model: SketchRNN, cfg: argparse.Namespace, step: int, device: torch.device
 ) -> None:
-    if cfg.wandb_project is None or cfg.eval_samples <= 0:
+    if not cfg.wandb.use or cfg.eval_samples <= 0:
         return
+
+    prev_mode = model.training
+    model.eval()
 
     generator = torch.Generator(device=device)
     generator.manual_seed(cfg.eval_seed + step)
@@ -72,8 +75,11 @@ def _log_eval_samples(
     if images:
         wandb.log({"samples/sketches": images}, step=step + 1)
 
+    if prev_mode:
+        model.train()
 
-def main() -> None:
+
+def main(_) -> None:
 
     cfg = load_cfgs(_CONFIG_FILE)
 
@@ -90,7 +96,9 @@ def main() -> None:
         seed=cfg.seed,
         coordinate_mode=cfg.coordinate_mode,
     )
-    collator = LSTMCollator(max_seq_len=cfg.max_seq_len)
+
+    max_seq_len = 220
+    collator = InContextSketchRNNCollator(max_seq_len=max_seq_len)
 
     dataloader = DataLoader(
         dataset,
@@ -100,17 +108,17 @@ def main() -> None:
         pin_memory=True,
         drop_last=True,
         collate_fn=collator,
-        prefetch_factor=4,
-        persistent_workers=True,
+        # prefetch_factor=4,
+        # persistent_workers=True,
     )
 
     sketch_config = SketchRNNConfig(
-        input_dim=5,
+        input_dim=cfg.input_dim,
         latent_dim=cfg.latent_dim,
         encoder_hidden_size=cfg.encoder_hidden,
-        encoder_num_layers=cfg.encoder_layers,
+        encoder_num_layers=cfg.encoder_num_layers,
         decoder_hidden_size=cfg.decoder_hidden,
-        decoder_num_layers=cfg.decoder_layers,
+        decoder_num_layers=cfg.decoder_num_layers,
         num_mixtures=cfg.num_mixtures,
         dropout=cfg.dropout,
     )
@@ -118,6 +126,8 @@ def main() -> None:
     optimizer = torch.optim.Adam(
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
     )
+
+    # scheduler = CosineAnnealingLR(optimizer, T_max=total_train_steps, eta_min=1e-6)
 
     save_dir = Path(cfg.checkpoint_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -159,11 +169,10 @@ def main() -> None:
         print(f"Saved profiling trace to {cfg.trace_dir}lstm_trace.json")
         return
 
-    if cfg.wandb_project:
+    if cfg.wandb.use:
         wandb.init(
-            project=cfg.wandb_project,
-            name=cfg.wandb_run,
-            entity=cfg.wandb_entity,
+            project=cfg.wandb.project,
+            entity=cfg.wandb.entity,
             config={**vars(cfg), "model": sketch_config.__dict__},
         )
         wandb.log({"model/parameters": total_params}, step=0)
@@ -195,7 +204,7 @@ def main() -> None:
 
             global_step += 1
             if (
-                cfg.wandb_project
+                cfg.wandb.use
                 and cfg.loss_log_every > 0
                 and global_step % cfg.loss_log_every == 0
             ):
@@ -217,7 +226,7 @@ def main() -> None:
         avg_loss = running / batches
         print(f"Epoch {epoch + 1}: avg loss {avg_loss:.6f}")
 
-        if cfg.wandb_project:
+        if cfg.wandb.use:
             wandb.log({"train/loss": avg_loss, "epoch": epoch + 1})
 
         if (
@@ -241,7 +250,7 @@ def main() -> None:
         ):
             _log_eval_samples(model, cfg, global_step, device)
 
-    if cfg.wandb_project:
+    if cfg.wandb.project:
         wandb.finish()
 
 

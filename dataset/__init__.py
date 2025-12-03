@@ -10,7 +10,7 @@ from . import visualize
 from .diffusion import DiffusionCollator
 from .episode_builder import Episode, EpisodeBuilder
 from .loader import QuickDrawEpisodes
-from .lstm import LSTMCollator, SketchRNNCollator
+from .lstm import SketchRNNCollator
 from .preprocess import (
     ProcessedSketch,
     QuickDrawPreprocessor,
@@ -40,6 +40,5 @@ __all__ = [
     "RasterizerConfig",
     "rasterize_absolute_points",
     "rasterize_processed_sketch",
-    "LSTMCollator",
     "SketchRNNCollator",
 ]

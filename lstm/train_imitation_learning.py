@@ -11,6 +11,7 @@ from pathlib import Path
 import matplotlib
 import torch
 from ml_collections import config_flags
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -135,6 +136,10 @@ def main(_) -> None:
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
     )
 
+    scheduler = CosineAnnealingLR(
+        optimizer, T_max=cfg.total_training_steps, eta_min=1e-6
+    )
+
     save_dir = Path(cfg.checkpoint_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -169,6 +174,7 @@ def main(_) -> None:
                     model.parameters(), max_norm=cfg.grad_clip
                 )
                 optimizer.step()
+                scheduler.step()
 
                 prof.step()
 
@@ -202,7 +208,7 @@ def main(_) -> None:
             kl_weight = compute_kl_weight(global_step, cfg)
             loss, metrics = model.compute_loss(strokes, lengths, kl_weight=kl_weight)
             if not torch.isfinite(loss):
-                continue
+                raise RuntimeError("Non-finite loss encountered during training.")
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.grad_clip)
             optimizer.step()

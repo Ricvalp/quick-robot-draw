@@ -4,7 +4,7 @@ from ml_collections import ConfigDict
 def get_config() -> ConfigDict:
     cfg = ConfigDict()
 
-    cfg.root = "data/single_class/eyeglasses-simplified"
+    cfg.root = "data/multi-class/"
     cfg.raw_root = "raw/"
     cfg.backend = "lmdb"  # one of: lmdb, webdataset, hdf5
     cfg.num_prompts = 5
@@ -31,8 +31,8 @@ def get_config() -> ConfigDict:
     cfg.storage.compression = "zstd"
     cfg.storage.shards = 64
 
-    cfg.families = ["eyeglasses"]
-    cfg.max_sketches_per_file = 100000
+    cfg.families = ["eyeglasses", "basketball", "airplane", "door", "t-shirt"]
+    cfg.max_sketches_per_file = 50000
 
     cfg.cache = ConfigDict()
     cfg.cache.sketches_subdir = "processed_sketches"

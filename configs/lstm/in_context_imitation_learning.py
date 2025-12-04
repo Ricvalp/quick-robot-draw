@@ -41,10 +41,9 @@ def get_config() -> ConfigDict:
     cfg.trace_dir = "profiling/lstm/"
 
     cfg.wandb = ConfigDict()
-    cfg.wandb.use = False
+    cfg.wandb.use = True
     cfg.wandb.project = "lstm-imitation-learning"
     cfg.wandb.entity = "your_entity"
-    cfg.wandb.run = None
     cfg.wandb.log_interval = 200
     cfg.wandb.log_all = False
 

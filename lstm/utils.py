@@ -89,3 +89,6 @@ class WarmupCosineScheduler:
             pg["lr"] = lr
 
         return lr  # so you can log it
+
+    def get_last_lr(self):
+        return self.optimizer.param_groups[0]["lr"]

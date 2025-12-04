@@ -225,6 +225,7 @@ def main(_) -> None:
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.grad_clip)
             optimizer.step()
+            curr_lr = scheduler.step()
 
             running += float(loss.detach().cpu())
             batches += 1
@@ -242,7 +243,7 @@ def main(_) -> None:
                         "train/recon": metrics["recon"],
                         "train/kl": metrics["kl"],
                         "train/kl_weight": metrics["kl_weight"],
-                        "train/lr": scheduler.get_last_lr(),
+                        "train/lr": curr_lr,
                     },
                     step=global_step,
                 )

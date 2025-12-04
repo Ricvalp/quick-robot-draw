@@ -242,7 +242,7 @@ def main(_) -> None:
                         "train/recon": metrics["recon"],
                         "train/kl": metrics["kl"],
                         "train/kl_weight": metrics["kl_weight"],
-                        "train/lr": scheduler.get_last_lr()[0],
+                        "train/lr": scheduler.get_last_lr(),
                     },
                     step=global_step,
                 )

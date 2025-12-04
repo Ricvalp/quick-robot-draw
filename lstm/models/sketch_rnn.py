@@ -158,24 +158,27 @@ class SketchRNN(nn.Module):
 
     def compute_loss(
         self,
-        strokes: torch.Tensor,
-        lengths: torch.Tensor,
+        queries: torch.Tensor,
+        queries_lengths: torch.Tensor,
+        contexts: torch.Tensor,
+        contexts_lengths: torch.Tensor,
         *,
         kl_weight: float = 1.0,
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        mu, logvar = self.encode(strokes, lengths)
+        mu, logvar = self.encode(contexts, contexts_lengths)
         z = self.reparameterize(mu, logvar)
 
-        inputs = strokes[:, :-1, :]
-        targets = strokes[:, 1:, :]
-        dec_lengths = lengths - 1
+        inputs = queries[:, :-1, :]
+        targets = queries[:, 1:, :]
+        dec_lengths = queries_lengths - 1
 
         decoder_outputs = self._decode_teacher_forcing(inputs, dec_lengths, z)
         params = self.mdn_head(decoder_outputs)
         mask = self._lengths_to_mask(dec_lengths, inputs.shape[1])
 
         xy = targets[..., :2]
-        pen_targets = torch.argmax(targets[..., 2:], dim=-1)
+        pen_targets = torch.cat([targets[..., 2:4], targets[..., -1:]], dim=-1)
+        pen_targets = torch.argmax(pen_targets, dim=-1)
 
         mdn_loss = self._mdn_nll(xy, params, mask)
         pen_loss = self._pen_loss(params["pen_logits"], pen_targets, mask)

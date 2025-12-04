@@ -90,7 +90,6 @@ class EpisodeBuilder:
             )
 
         self.special_tokens = {
-            "start": self._special_token(start=1.0),
             "separator": self._special_token(sep=1.0),
             "reset": self._special_token(reset=1.0),
             "stop": self._special_token(stop=1.0),
@@ -151,7 +150,7 @@ class EpisodeBuilder:
             "family_id": resolved_family,
             "k_shot": self.k_shot,
             "length": total_len,
-            **self._compute_episode_markers(episode_tokens, query_sketch.length),
+            # **self._compute_episode_markers(episode_tokens, query_sketch.length),
         }
         return Episode(
             episode_id=episode_id,
@@ -177,7 +176,6 @@ class EpisodeBuilder:
 
     def _special_token(
         self,
-        start: float = 0.0,
         sep: float = 0.0,
         reset: float = 0.0,
         stop: float = 0.0,
@@ -186,10 +184,9 @@ class EpisodeBuilder:
         Create a special control token with the requested indicator bits.
 
         Channels 0-2 remain zero; channels 3-6 encode the structural markers
-        (start/sep/reset/stop) used by downstream policies.
+        (sep/reset/stop) used by downstream policies.
         """
         token = np.zeros(self.token_dim, dtype=self.dtype)
-        token[3] = start
         token[4] = sep
         token[5] = reset
         token[6] = stop
@@ -201,25 +198,23 @@ class EpisodeBuilder:
         """
         Concatenate prompt and query sketches into a single token matrix.
 
-        The sequence adheres to the `[START, prompt₁, SEP, …, RESET, START, query, STOP]`
+        The sequence adheres to the `[START, prompt₁, SEP, …, RESET, query, STOP]`
         convention required for in-context imitation learning.
         """
-        segments: List[np.ndarray] = [self.special_tokens["start"]]
+        segments: List[np.ndarray] = [self.special_tokens["separator"]]  # Dummy start
         for sketch in prompt_sketches:
             segments.append(self._sketch_to_tokens(sketch))
             segments.append(self.special_tokens["separator"])
         segments.append(self.special_tokens["reset"])
-        segments.append(self.special_tokens["start"])
+        segments.append(self.special_tokens["separator"])
         segments.append(self._sketch_to_tokens(query_sketch))
         segments.append(self.special_tokens["stop"])
         return np.vstack(segments).astype(self.dtype, copy=False)
 
     def _sketch_to_tokens(self, sketch: ProcessedSketch) -> np.ndarray:
         """
-        Convert a processed sketch into its `(dx, dy, pen, start, sep, reset, stop)` tokens.
+        Convert a processed sketch into its `(dx, dy, pen-up, pen-down, sep, reset, stop)` tokens.
 
-        Only the sketch-level start flag is set here; higher-level separators are appended
-        by `_compose_tokens`.
         """
         tokens = np.zeros((sketch.length, self.token_dim), dtype=self.dtype)
         if self.coordinate_mode == "delta":
@@ -227,7 +222,7 @@ class EpisodeBuilder:
         else:
             tokens[:, 0:2] = sketch.absolute
         tokens[:, 2] = sketch.pen
-        tokens[0, 3] = 1.0  # mark new sketch start
+        tokens[:, 3] = 1 - sketch.pen
         return tokens
 
     def _maybe_augment(
@@ -314,24 +309,15 @@ class EpisodeBuilder:
         reset_indices = np.where(tokens[:, 5] > 0.5)[0]
         if reset_indices.size > 0:
             result["reset_index"] = int(reset_indices[0])
-        start_indices = np.where(tokens[:, 3] > 0.5)[0]
-        query_start_special = None
-        if start_indices.size > 0 and "reset_index" in result:
-            larger = start_indices[start_indices > result["reset_index"]]
-            if larger.size > 0:
-                query_start_special = int(larger[0])
-                result["query_start_special_index"] = query_start_special
+            result["query_start_index"] = result["reset_index"] + 1
         stop_indices = np.where(tokens[:, 6] > 0.5)[0]
         if stop_indices.size > 0:
             result["stop_index"] = int(stop_indices[0])
-        if query_start_special is not None:
-            result["query_start_index"] = query_start_special + 1
-            if "stop_index" in result:
-                result["query_length"] = (
-                    result["stop_index"] - result["query_start_index"]
-                )
-            else:
-                result["query_length"] = query_length
+        if "stop_index" in result:
+            result["query_length"] = (
+                result["stop_index"] - result["query_start_index"] - 1
+            )
         else:
             result["query_length"] = query_length
+
         return result

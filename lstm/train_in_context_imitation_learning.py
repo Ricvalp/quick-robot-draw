@@ -97,8 +97,11 @@ def main(_) -> None:
         coordinate_mode=cfg.coordinate_mode,
     )
 
-    max_seq_len = 220
-    collator = InContextSketchRNNCollator(max_seq_len=max_seq_len)
+    max_query_len = 350
+    max_context_len = 1000
+    collator = InContextSketchRNNCollator(
+        max_query_len=max_query_len, max_context_len=max_context_len
+    )
 
     dataloader = DataLoader(
         dataset,
@@ -186,12 +189,20 @@ def main(_) -> None:
         progress = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{cfg.epochs}", leave=False)
 
         for batch in progress:
-            strokes = batch["strokes"].to(device)
-            lengths = batch["lengths"].to(device)
+            queries = batch["queries"].to(device)
+            contexts = batch["contexts"].to(device)
+            queries_lengths = batch["queries_lengths"].to(device)
+            contexts_lengths = batch["contexts_lengths"].to(device)
 
             optimizer.zero_grad(set_to_none=True)
             kl_weight = compute_kl_weight(global_step, cfg)
-            loss, metrics = model.compute_loss(strokes, lengths, kl_weight=kl_weight)
+            loss, metrics = model.compute_loss(
+                queries=queries,
+                queries_lengths=queries_lengths,
+                contexts=contexts,
+                contexts_lengths=contexts_lengths,
+                kl_weight=kl_weight,
+            )
             if not torch.isfinite(loss):
                 continue
             loss.backward()

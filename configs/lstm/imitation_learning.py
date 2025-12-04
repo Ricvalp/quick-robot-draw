@@ -28,6 +28,7 @@ def get_config() -> ConfigDict:
     cfg.kl_start = 0.0
     cfg.kl_end = 1.0
     cfg.kl_anneal_steps = 10000
+    cfg.warmup_steps = 10000
     cfg.total_training_steps = 1000000
     cfg.grad_clip = 1.0
     cfg.checkpoint_dir = "lstm/checkpoints"

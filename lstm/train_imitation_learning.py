@@ -11,7 +11,6 @@ from pathlib import Path
 import matplotlib
 import torch
 from ml_collections import config_flags
-from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -23,7 +22,13 @@ import wandb
 from dataset.loader import QuickDrawEpisodes
 from dataset.lstm import SketchRNNCollator
 from diffusion.sampling import tokens_to_figure
-from lstm import SketchRNN, SketchRNNConfig, strokes_to_tokens, trim_strokes_to_eos
+from lstm import (
+    SketchRNN,
+    SketchRNNConfig,
+    WarmupCosineScheduler,
+    strokes_to_tokens,
+    trim_strokes_to_eos,
+)
 
 _CONFIG_FILE = config_flags.DEFINE_config_file(
     "config", default="/configs/lstm/imitation_learning.py"
@@ -136,8 +141,16 @@ def main(_) -> None:
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
     )
 
-    scheduler = CosineAnnealingLR(
-        optimizer, T_max=cfg.total_training_steps, eta_min=1e-6
+    # scheduler = CosineAnnealingLR(
+    #     optimizer, T_max=cfg.total_training_steps, eta_min=1e-6
+    # )
+
+    scheduler = WarmupCosineScheduler(
+        optimizer,
+        warmup_steps=10000,
+        total_steps=cfg.total_training_steps,
+        max_lr=cfg.lr,
+        min_lr=1e-6,
     )
 
     save_dir = Path(cfg.checkpoint_dir)
@@ -229,6 +242,7 @@ def main(_) -> None:
                         "train/recon": metrics["recon"],
                         "train/kl": metrics["kl"],
                         "train/kl_weight": metrics["kl_weight"],
+                        "train/lr": scheduler.get_last_lr()[0],
                     },
                     step=global_step,
                 )

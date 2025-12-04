@@ -4,11 +4,12 @@ Utility helpers for working with SketchRNN stroke tensors.
 
 from __future__ import annotations
 
+import math
 from typing import List
 
 import torch
 
-__all__ = ["trim_strokes_to_eos", "strokes_to_tokens"]
+__all__ = ["trim_strokes_to_eos", "strokes_to_tokens", "WarmupCosineScheduler"]
 
 
 def trim_strokes_to_eos(strokes: torch.Tensor) -> List[torch.Tensor]:
@@ -51,3 +52,40 @@ def strokes_to_tokens(strokes: torch.Tensor) -> torch.Tensor:
     tokens[:, :2] = strokes[:, :2]
     tokens[:, 2] = strokes[:, 2]
     return tokens
+
+
+class WarmupCosineScheduler:
+    """
+    Linear warmup to max_lr, then cosine decay to min_lr.
+    Step this once per optimizer update.
+    """
+
+    def __init__(self, optimizer, warmup_steps, total_steps, max_lr, min_lr=0.0):
+        self.optimizer = optimizer
+        self.warmup_steps = warmup_steps
+        self.total_steps = total_steps
+        self.max_lr = max_lr
+        self.min_lr = min_lr
+        self.step_num = 0
+
+    def step(self):
+        self.step_num += 1
+
+        if self.step_num < self.warmup_steps:
+            # ------- Linear warmup -------
+            lr = self.max_lr * (self.step_num / self.warmup_steps)
+
+        else:
+            # ------- Cosine decay -------
+            progress = (self.step_num - self.warmup_steps) / (
+                self.total_steps - self.warmup_steps
+            )
+            lr = self.min_lr + (self.max_lr - self.min_lr) * 0.5 * (
+                1 + math.cos(math.pi * progress)
+            )
+
+        # apply LR to optimizer
+        for pg in self.optimizer.param_groups:
+            pg["lr"] = lr
+
+        return lr  # so you can log it

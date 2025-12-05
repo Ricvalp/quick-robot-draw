@@ -43,7 +43,7 @@ def get_config() -> ConfigDict:
     cfg.wandb = ConfigDict()
     cfg.wandb.use = True
     cfg.wandb.project = "lstm-imitation-learning"
-    cfg.wandb.entity = "your_entity"
+    cfg.wandb.entity = "ricvalp"
     cfg.wandb.log_interval = 200
     cfg.wandb.log_all = False
 

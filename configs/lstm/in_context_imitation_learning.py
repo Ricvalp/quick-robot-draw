@@ -22,6 +22,7 @@ def get_config() -> ConfigDict:
     cfg.encoder_num_layers = 1
     cfg.decoder_hidden = 512
     cfg.decoder_num_layers = 1
+    cfg.log_loss_every = 100
     cfg.latent_dim = 128
     cfg.num_mixtures = 20
     cfg.dropout = 0.0

@@ -68,6 +68,8 @@ class EpisodeBuilder:
         family_ids: Sequence[str],
         k_shot: int,
         max_seq_len: Optional[int] = None,
+        max_query_len: Optional[int] = None,
+        max_context_len: Optional[int] = None,
         seed: Optional[int] = None,
         augment_config: Optional[Dict[str, object]] = None,
         dtype=np.float32,
@@ -78,6 +80,8 @@ class EpisodeBuilder:
         self.family_ids = list(family_ids)
         self.k_shot = int(k_shot)
         self.max_seq_len = max_seq_len
+        self.max_query_len = max_query_len
+        self.max_context_len = max_context_len
         self.dtype = dtype
         self.random = np.random.RandomState(seed)
         self.augment_config = self._resolve_augment_config(augment_config or {})
@@ -95,9 +99,6 @@ class EpisodeBuilder:
             "stop": self._special_token(stop=1.0),
         }
 
-    # ------------------------------------------------------------------ #
-    # Public API
-    # ------------------------------------------------------------------ #
     def build_episode(
         self,
         *,
@@ -142,7 +143,19 @@ class EpisodeBuilder:
             raise ValueError(
                 f"Episode length {total_len} exceeds limit {self.max_seq_len}."
             )
-
+        if self.max_query_len is not None and query_sketch.length > self.max_query_len:
+            raise ValueError(
+                f"Query length {query_sketch.length} exceeds limit {self.max_query_len}."
+            )
+        if (
+            self.max_context_len is not None
+            and sum(sk.length for sk in prompt_sketches) + self.k_shot + 2
+            > self.max_context_len
+        ):
+            raise ValueError(
+                f"Context length {sum(sk.length for sk in prompt_sketches)} "
+                f"exceeds limit {self.max_context_len}."
+            )
         episode_id = uuid.uuid4().hex
         metadata = {
             "prompt_ids": prompt_ids,
@@ -150,7 +163,6 @@ class EpisodeBuilder:
             "family_id": resolved_family,
             "k_shot": self.k_shot,
             "length": total_len,
-            # **self._compute_episode_markers(episode_tokens, query_sketch.length),
         }
         return Episode(
             episode_id=episode_id,
@@ -166,9 +178,6 @@ class EpisodeBuilder:
             metadata=metadata,
         )
 
-    # ------------------------------------------------------------------ #
-    # Helpers
-    # ------------------------------------------------------------------ #
     def _sample_family(self, rng: np.random.RandomState) -> str:
         """Sample a family identifier using the provided RNG."""
         idx = rng.randint(0, len(self.family_ids))
@@ -300,24 +309,3 @@ class EpisodeBuilder:
             merged[key] = {**params, **user}
             merged[key]["enabled"] = bool(merged[key].get("enabled", params["enabled"]))
         return merged
-
-    def _compute_episode_markers(
-        self, tokens: np.ndarray, query_length: int
-    ) -> Dict[str, int]:
-        """Return indices for reset, query start, and stop tokens."""
-        result: Dict[str, int] = {}
-        reset_indices = np.where(tokens[:, 5] > 0.5)[0]
-        if reset_indices.size > 0:
-            result["reset_index"] = int(reset_indices[0])
-            result["query_start_index"] = result["reset_index"] + 1
-        stop_indices = np.where(tokens[:, 6] > 0.5)[0]
-        if stop_indices.size > 0:
-            result["stop_index"] = int(stop_indices[0])
-        if "stop_index" in result:
-            result["query_length"] = (
-                result["stop_index"] - result["query_start_index"] - 1
-            )
-        else:
-            result["query_length"] = query_length
-
-        return result

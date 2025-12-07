@@ -13,18 +13,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-__all__ = ["SketchRNNConfig", "SketchRNN"]
+__all__ = ["SketchRNNConfig", "SketchRNN", "SketchRNNUnconditional"]
 
 
 @dataclass
 class SketchRNNConfig:
     """Configuration container for the SketchRNN architecture."""
 
-    input_dim: int = 5
+    input_dim: int = 7
+    output_dim: int = 6
     latent_dim: int = 128
-    encoder_hidden_size: int = 256
+    encoder_hidden: int = 256
     encoder_num_layers: int = 1
-    decoder_hidden_size: int = 512
+    decoder_hidden: int = 512
     decoder_num_layers: int = 1
     num_mixtures: int = 20
     dropout: float = 0.0
@@ -86,7 +87,7 @@ class SketchRNN(nn.Module):
             dropout=enc_dropout,
         )
         self.decoder = nn.LSTM(
-            input_size=cfg.input_dim + cfg.latent_dim,
+            input_size=cfg.output_dim + cfg.latent_dim,
             hidden_size=cfg.decoder_hidden,
             num_layers=cfg.decoder_num_layers,
             batch_first=True,
@@ -174,7 +175,9 @@ class SketchRNN(nn.Module):
 
         decoder_outputs = self._decode_teacher_forcing(inputs, dec_lengths, z)
         params = self.mdn_head(decoder_outputs)
+
         mask = self._lengths_to_mask(dec_lengths, inputs.shape[1])
+        # mask = self._lengths_to_mask(torch.tile(torch.tensor([inputs.shape[1]]), (inputs.shape[0],)), inputs.shape[1]).to(inputs.device)
 
         xy = targets[..., :2]
         pen_targets = torch.cat([targets[..., 2:4], targets[..., -1:]], dim=-1)
@@ -263,6 +266,10 @@ class SketchRNN(nn.Module):
     def sample(
         self,
         num_steps: int,
+        contexts: torch.Tensor,
+        context_lengths: torch.Tensor,
+        unconditional: bool = False,
+        deterministic: bool = True,
         *,
         num_samples: int = 1,
         temperature: float = 1.0,
@@ -278,19 +285,32 @@ class SketchRNN(nn.Module):
                 torch.randint(0, 2**31 - 1, (1,), device=device).item()
             )
 
-        z = torch.randn(
-            num_samples, self.cfg.latent_dim, device=device, generator=generator
-        )
+        if unconditional:
+            z = torch.randn(
+                num_samples, self.cfg.latent_dim, device=device, generator=generator
+            )
+        elif contexts is not None and context_lengths is not None:
+            mu, logvar = self.encode(contexts, context_lengths)
+            if deterministic:
+                z = mu
+            else:
+                z = self.reparameterize(mu, logvar)
+        else:
+            raise ValueError(
+                "Either unconditional must be True or contexts and context_lengths must be provided."
+            )
         hidden_state = self._init_decoder_state(z)
-        prev = torch.zeros(num_samples, 5, device=device)
-        prev[:, 3] = 1.0  # start with pen-up
+        prev = torch.zeros(z.shape[0], self.cfg.output_dim, device=device)
+        prev[:, 4] = 1.0  # start with pen-up
 
-        eos_token = prev.clone()
-        eos_token[:, :] = 0.0
+        # eos_token = prev.clone()
+
+        eos_token = torch.zeros(z.shape[0], 5, device=device)
+        # eos_token[:, :] = 0.0
         eos_token[:, -1] = 1.0
 
         sequences: List[torch.Tensor] = []
-        finished = torch.zeros(num_samples, dtype=torch.bool, device=device)
+        finished = torch.zeros(z.shape[0], dtype=torch.bool, device=device)
 
         for _ in range(num_steps):
             decoder_in = torch.cat([prev, z], dim=-1).unsqueeze(1)
@@ -303,7 +323,10 @@ class SketchRNN(nn.Module):
 
             just_finished = stroke[:, -1] > 0.5
             finished = finished | just_finished
-            prev = stroke
+            prev[:, :4] = stroke[:, :4]
+            prev[:, 4] = 0.0  # set sep token to zero
+            prev[:, -1] = stroke[:, -1]  # reset EOS to zero for next step
+
             if bool(finished.all()):
                 break
 
@@ -367,3 +390,38 @@ class SketchRNN(nn.Module):
             dim=-1,
         )
         return stroke
+
+
+class SketchRNNUnconditional(SketchRNN):
+    """SketchRNN model without encoder for unconditional generation."""
+
+    def __init__(self, cfg: SketchRNNConfig) -> None:
+        super().__init__(cfg)
+
+    def forward(
+        self,
+        strokes: torch.Tensor,
+        lengths: torch.Tensor,
+    ) -> Tuple[torch.Tensor, Dict[str, float]]:
+        pass
+
+    def compute_loss(
+        self,
+        strokes: torch.Tensor,
+        lengths: torch.Tensor,
+    ) -> Tuple[torch.Tensor, Dict[str, float]]:
+        pass
+
+    def sample(
+        self,
+        num_steps: int,
+        *,
+        num_samples: int = 1,
+        temperature: float = 1.0,
+        greedy: bool = False,
+        generator: Optional[torch.Generator] = None,
+    ) -> torch.Tensor:
+        pass
+
+    def _sample_step(self, params, temperature, greedy, generator):
+        pass

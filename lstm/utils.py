@@ -29,7 +29,7 @@ def trim_strokes_to_eos(strokes: torch.Tensor) -> List[torch.Tensor]:
     """
     trimmed: List[torch.Tensor] = []
     for seq in strokes:
-        eos = torch.nonzero(seq[:, 4] > 0.5, as_tuple=False)
+        eos = torch.nonzero(seq[:, -1] > 0.5, as_tuple=False)
         if eos.numel() > 0:
             end = int(eos[0].item()) + 1
         else:

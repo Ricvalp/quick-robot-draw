@@ -339,10 +339,8 @@ class InContextSketchRNNCollator:
         self,
         *,
         max_query_len: Optional[int],
-        max_context_len: Optional[
-            int
-        ],  # <-- set this to dataset-wide Nmax for exact match
-        tokens_are_deltas: bool = True,
+        max_context_len: Optional[int],
+        teacher_forcing_with_eos: bool = False,
     ) -> None:
         if max_query_len is not None and max_query_len < 2:
             raise ValueError("max_query_len must be >= 2 when provided.")
@@ -350,7 +348,7 @@ class InContextSketchRNNCollator:
             raise ValueError("max_context_len must be >= 2 when provided.")
         self.max_query_len = max_query_len
         self.max_context_len = max_context_len
-        self.tokens_are_deltas = tokens_are_deltas
+        self.teacher_forcing_with_eos = teacher_forcing_with_eos
 
     def __call__(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         queries: List[torch.Tensor] = []
@@ -360,20 +358,22 @@ class InContextSketchRNNCollator:
 
         for sample in batch:
             tokens = sample["tokens"]
-            # metadata = sample.get("metadata", {})
             context, query = self._extract_context_query(tokens)
 
-            # strokes = self._tokens_to_sketchrnn_strokes(query)
-
-            # Optional truncation to max_seq_len (if sequences can exceed Nmax)
-            # if self.max_seq_len is not None and query.shape[0] > self.max_seq_len:
-            #     strokes = self._truncate_with_eos(strokes, self.max_seq_len)
-
             queries.append(query)
-            queries_lengths.append(query.shape[0])
+            queries_lengths.append(
+                query.shape[0]
+                if query.shape[0] <= self.max_query_len or self.max_query_len is None
+                else self.max_query_len
+            )
 
             contexts.append(context)
-            contexts_lengths.append(context.shape[0])
+            contexts_lengths.append(
+                context.shape[0]
+                if context.shape[0] <= self.max_context_len
+                or self.max_context_len is None
+                else self.max_context_len
+            )
 
         if not queries:
             raise ValueError(
@@ -414,8 +414,10 @@ class InContextSketchRNNCollator:
             L = min(length, max_context_len)
             padded_context[idx, :L] = seq[:L]
 
+        if self.teacher_forcing_with_eos:
+            queries_lengths = [max_query_len for _ in queries_lengths]
         return {
-            "queries": padded_query,
+            "queries": padded_query[:, :, [0, 1, 2, 3, 4, 6]],
             "contexts": padded_context,
             "queries_lengths": torch.tensor(
                 queries_lengths, dtype=torch.long, device=device
@@ -425,7 +427,6 @@ class InContextSketchRNNCollator:
             ),
         }
 
-    # --- Query extraction: kept exactly as you already had it ---
     def _extract_context_query(
         self,
         tokens: torch.Tensor,
@@ -438,7 +439,7 @@ class InContextSketchRNNCollator:
         stop_idx = self._first_index(tokens[:, 6], min_index=start_idx)
         if stop_idx is None or stop_idx <= start_idx + 1:
             raise ValueError("No valid query sketch found in episode.")
-        return tokens[:reset_idx].clone(), tokens[start_idx + 1 : stop_idx].clone()
+        return tokens[: reset_idx + 1].clone(), tokens[start_idx:].clone()
 
     @staticmethod
     def _first_index(column: torch.Tensor, min_index: int = -1) -> Optional[int]:
@@ -448,53 +449,6 @@ class InContextSketchRNNCollator:
             if value > min_index:
                 return value
         return None
-
-    # --- This is the core: convert your tokens into SketchRNN strokes ---
-    # def _tokens_to_sketchrnn_strokes(self, tokens: torch.Tensor) -> torch.Tensor:
-    #     """
-    #     Convert a (T, D) token tensor into a (T+1, 5) SketchRNN stroke sequence.
-
-    #     Steps:
-    #         1. Take coords (x, y).
-    #         2. Convert to deltas (Δx, Δy) if needed.
-    #         3. Infer stroke boundaries from pen column.
-    #         4. Build (Δx, Δy, p1, p2, p3=0) for all real points.
-    #         5. Append a single EOS row (0, 0, 0, 0, 1).
-    #     """
-    #     # 1) coords
-    #     deltas = tokens[:, :2].to(dtype=torch.float32)
-
-    #     # 3) infer stroke endings from pen column
-    #     pen = tokens[:, 2].to(dtype=torch.float32)  # 1 while drawing, 0 otherwise
-
-    #     pen_down = pen
-    #     pen_up = 1.0 - pen_down
-
-    #     # p3 = EOS; only used for explicit EOS + padding
-    #     eos = torch.zeros_like(pen_down)
-
-    #     strokes = torch.stack(
-    #         [deltas[:, 0], deltas[:, 1], pen_down, pen_up, eos],
-    #         dim=-1,
-    #     )
-
-    #     # 5) append explicit EOS row (0, 0, 0, 0, 1)
-    #     eos_row = self._eos_row(device=strokes.device, dtype=strokes.dtype)
-    #     strokes = torch.cat([strokes, eos_row], dim=0)
-
-    #     return strokes
-
-    # def _truncate_with_eos(self, strokes: torch.Tensor, max_len: int) -> torch.Tensor:
-    #     """
-    #     Truncate to max_len but ensure last row is EOS (0, 0, 0, 0, 1).
-
-    #     This is important to keep exactly one explicit EOS in truncated sequences.
-    #     """
-    #     truncated = strokes[:max_len].clone()
-    #     # overwrite last row with a clean EOS row
-    #     truncated[-1] = 0.0
-    #     truncated[-1, -1] = 1.0
-    #     return truncated
 
     @staticmethod
     def _eos_row(device: torch.device, dtype: torch.dtype) -> torch.Tensor:

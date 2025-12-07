@@ -4,42 +4,65 @@ from ml_collections import ConfigDict, config_dict
 def get_config() -> ConfigDict:
 
     cfg = ConfigDict()
-    cfg.seed = 2024
-    cfg.data_root = config_dict.placeholder(str)
-    cfg.device = "cuda"  # or "cpu"
-    cfg.split = "train"
-    cfg.backend = "lmdb"
-    cfg.K = 4
-    cfg.batch_size = 64
-    cfg.epochs = 100
-    cfg.lr = 1e-3
-    cfg.input_dim = 7
-    cfg.weight_decay = 0.0
-    cfg.num_workers = 16
-    cfg.max_seq_len = 350
-    cfg.coordinate_mode = "delta"
-    cfg.encoder_hidden = 256
-    cfg.encoder_num_layers = 1
-    cfg.decoder_hidden = 512
-    cfg.decoder_num_layers = 1
-    cfg.loss_log_every = 100
-    cfg.latent_dim = 128
-    cfg.num_mixtures = 20
-    cfg.dropout = 0.0
-    cfg.kl_start = 0.0
-    cfg.kl_end = 1.0
-    cfg.kl_anneal_steps = 20000
-    cfg.grad_clip = 1.0
-    cfg.checkpoint_dir = "lstm/checkpoints"
-    cfg.save_interval = 10
-    cfg.eval_samples = 4
-    cfg.eval_steps = 1000
-    cfg.eval_interval = 1
-    cfg.eval_temperature = 0.65
-    cfg.eval_seed = 42
-    cfg.greedy_eval = False
-    cfg.profile = False
-    cfg.trace_dir = "profiling/lstm/"
+    cfg.run = ConfigDict()
+    cfg.run.seed = 2024
+    cfg.run.device = "cuda"  # or "cpu"
+
+    cfg.data = ConfigDict()
+    cfg.data.root = config_dict.placeholder(str)
+    cfg.data.split = "train"
+    cfg.data.backend = "lmdb"
+    cfg.data.K = 4
+    cfg.data.max_seq_len = 480
+    cfg.data.max_query_len = 60
+    cfg.data.max_context_len = 400
+    cfg.data.coordinate_mode = "delta"
+
+    cfg.loader = ConfigDict()
+    cfg.loader.batch_size = 64
+    cfg.loader.num_workers = 16
+
+    cfg.training = ConfigDict()
+    cfg.training.epochs = 100
+    cfg.training.lr = 1e-3
+    cfg.training.weight_decay = 0.0
+    cfg.training.grad_clip = 1.0
+
+    cfg.model = ConfigDict()
+    cfg.model.input_dim = 7
+    cfg.model.output_dim = 6
+    cfg.model.latent_dim = 128
+    cfg.model.encoder_hidden = 256
+    cfg.model.encoder_num_layers = 1
+    cfg.model.decoder_hidden = 512
+    cfg.model.decoder_num_layers = 1
+    cfg.model.num_mixtures = 20
+    cfg.model.dropout = 0.0
+    cfg.model.teacher_forcing_with_eos = True
+
+    cfg.kl = ConfigDict()
+    cfg.kl.start = 0.0
+    cfg.kl.end = 1.0
+    cfg.kl.anneal_steps = 20000
+
+    cfg.logging = ConfigDict()
+    cfg.logging.loss_log_every = 100
+
+    cfg.checkpoint = ConfigDict()
+    cfg.checkpoint.dir = "lstm/checkpoints"
+    cfg.checkpoint.save_interval = 10
+
+    cfg.eval = ConfigDict()
+    cfg.eval.samples = 4
+    cfg.eval.steps = 1000
+    cfg.eval.interval = 1
+    cfg.eval.temperature = 0.65
+    cfg.eval.seed = 42
+    cfg.eval.greedy = False
+
+    cfg.profiling = ConfigDict()
+    cfg.profiling.use = False
+    cfg.profiling.trace_dir = "profiling/lstm/"
 
     cfg.wandb = ConfigDict()
     cfg.wandb.use = True

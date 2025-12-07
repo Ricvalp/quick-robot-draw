@@ -111,9 +111,9 @@
             },
             "args": [
                 "--config=configs/lstm/in_context_imitation_learning.py",
-                "--config.data_root=data/all-classes/",
-                "--config.num_workers=0",
-                "--config.eval_interval=100",
+                "--config.data.root=data/single-class/eyeglasses-simplified/",
+                "--config.loader.num_workers=0",
+                "--config.eval.interval=100",
                 "--config.wandb.use=False",
             ]
         },

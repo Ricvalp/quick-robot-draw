@@ -12,8 +12,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, get_worker_info
 
-from .episode_builder import EpisodeBuilder
-from .storage import DatasetManifest, SketchStorage, StorageConfig
+from dataset.episode_builder import EpisodeBuilder
+from dataset.storage import DatasetManifest, SketchStorage, StorageConfig
 
 __all__ = ["QuickDrawEpisodes"]
 
@@ -55,7 +55,9 @@ class QuickDrawEpisodes(Dataset):
         *,
         split: str = "train",
         K: int = 5,
-        max_seq_len: Optional[int] = 512,
+        max_seq_len: Optional[int] = None,
+        max_query_len: Optional[int] = None,
+        max_context_len: Optional[int] = None,
         backend: str = "lmdb",
         augment: bool = True,
         storage_config: Optional[StorageConfig] = None,
@@ -67,6 +69,8 @@ class QuickDrawEpisodes(Dataset):
         self.split = split
         self.k_shot = K
         self.max_seq_len = max_seq_len
+        self.max_query_len = max_query_len
+        self.max_context_len = max_context_len
         self.augment = augment
         self.seed = seed
         self.augment_config = augment_config
@@ -106,7 +110,7 @@ class QuickDrawEpisodes(Dataset):
         self._worker_pid = None
 
         self.retry_on_overflow = self.max_seq_len is not None
-        self.max_retry_attempts = 8
+        self.max_retry_attempts = 32
         if self.retry_on_overflow:
             warnings.warn(
                 f"QuickDrawEpisodes will resample episodes until they fit "
@@ -153,23 +157,20 @@ class QuickDrawEpisodes(Dataset):
 
         attempts = self.max_retry_attempts if self.retry_on_overflow else 1
         episode = None
-        last_exc: Optional[Exception] = None
         for attempt in range(attempts):
             rng_seed = (base_seed + attempt * 9773) % (2**32)
             rng = np.random.RandomState(rng_seed)
             try:
                 episode = self.builder.build_episode(augment=self.augment, rng=rng)
                 break
-            except ValueError as exc:
-                if not self.retry_on_overflow or "Episode length" not in str(exc):
-                    raise
-                last_exc = exc
+            except ValueError:
+
                 continue
         if episode is None:
             raise RuntimeError(
                 f"Unable to sample an episode ≤ {self.max_seq_len} tokens after "
                 f"{attempts} attempts."
-            ) from last_exc
+            )
         tokens = torch.from_numpy(episode.tokens.astype(np.float32, copy=False))
         return {
             "tokens": tokens,
@@ -221,6 +222,8 @@ class QuickDrawEpisodes(Dataset):
             family_ids=self.family_ids,
             k_shot=self.k_shot,
             max_seq_len=self.max_seq_len,
+            max_query_len=self.max_query_len,
+            max_context_len=self.max_context_len,
             seed=self.seed,
             augment_config=self.augment_config,
             coordinate_mode=self.coordinate_mode,
@@ -229,3 +232,78 @@ class QuickDrawEpisodes(Dataset):
 
     def _fetch_family(self, family_id: str) -> List[str]:
         return self.family_to_samples[family_id]
+
+
+if __name__ == "__main__":
+
+    import argparse
+
+    import tqdm
+
+    parser = argparse.ArgumentParser(description="Analyze episode length distribution")
+    parser.add_argument(
+        "--root",
+        type=str,
+        default="data/all-classes/",
+        help="Root directory of dataset",
+    )
+    parser.add_argument("--lengths_path", type=str, default=None)
+
+    args = parser.parse_args()
+
+    if args.lengths_path is not None and os.path.exists(args.lengths_path):
+        lengths = np.load(args.lengths_path)
+        print(f"Loaded lengths from {args.lengths_path}")
+    else:
+
+        dataset = QuickDrawEpisodes(
+            root=args.root,
+            split="train",
+            K=0,
+            max_seq_len=10000,
+            backend="lmdb",
+            augment=False,
+            seed=42,
+            coordinate_mode="delta",
+        )
+
+        def length_collate_fn(batch):
+            lengths = [item["length"] for item in batch]
+            return {"length": torch.tensor(lengths)}
+
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=128,
+            shuffle=False,
+            num_workers=8,
+            drop_last=False,
+            collate_fn=length_collate_fn,
+        )
+
+        lengths = []
+        for batch in tqdm.tqdm(dataloader):
+            lengths.extend(batch["length"].tolist())
+
+        np.save(args.lengths_path or "episode_lengths.npy", np.array(lengths))
+
+    import matplotlib.pyplot as plt
+
+    plt.hist(lengths, bins=600, log=True)
+    plt.title(
+        f"Episode Lengths Distribution. Min len {min(lengths)}, Max len {max(lengths)}"
+    )
+    plt.savefig("episode_lengths.png")
+    plt.close()
+
+    x = np.sort(np.unique(lengths))
+    y = (lengths[:, None] > x).sum(axis=0)
+
+    plt.step(x, y, where="post")
+    plt.xlabel("Episode length")
+    plt.ylabel("Count with length > x")
+    plt.title("Cumulative length distribution")
+    plt.grid(True, which="both", alpha=0.3)
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.tight_layout()
+    plt.savefig("episode_lengths_cdf.png")  # or plt.show()

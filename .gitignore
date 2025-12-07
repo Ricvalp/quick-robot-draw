@@ -11,3 +11,5 @@ profiling/
 *__pycache__/
 
 .ruff_cache/
+
+episode_lengths*

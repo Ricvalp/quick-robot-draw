@@ -72,7 +72,7 @@ def _log_qualitative_samples(
         contexts=context.to(device=device),
         context_lengths=context_lengths.to(device=device),
         num_samples=cfg.eval.samples,
-        unconditional=True,
+        unconditional=False,
         deterministic=True,
         generator=generator,
     )

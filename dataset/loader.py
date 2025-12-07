@@ -58,6 +58,7 @@ class QuickDrawEpisodes(Dataset):
         max_seq_len: Optional[int] = None,
         max_query_len: Optional[int] = None,
         max_context_len: Optional[int] = None,
+        retry_on_overflow: bool = True,
         backend: str = "lmdb",
         augment: bool = True,
         storage_config: Optional[StorageConfig] = None,
@@ -71,6 +72,7 @@ class QuickDrawEpisodes(Dataset):
         self.max_seq_len = max_seq_len
         self.max_query_len = max_query_len
         self.max_context_len = max_context_len
+        self.retry_on_overflow = retry_on_overflow
         self.augment = augment
         self.seed = seed
         self.augment_config = augment_config
@@ -109,7 +111,7 @@ class QuickDrawEpisodes(Dataset):
         self.builder = None
         self._worker_pid = None
 
-        self.retry_on_overflow = self.max_seq_len is not None
+        self.retry_on_overflow = retry_on_overflow
         self.max_retry_attempts = 32
         if self.retry_on_overflow:
             warnings.warn(

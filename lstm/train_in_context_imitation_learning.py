@@ -8,11 +8,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import torch
 from ml_collections import config_flags
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+
+matplotlib.use("Agg")
 
 import wandb
 from dataset.loader import QuickDrawEpisodes
@@ -110,11 +113,9 @@ def main(_) -> None:
         coordinate_mode=cfg.data.coordinate_mode,
     )
 
-    max_query_len = 350
-    max_context_len = 1000
     collator = InContextSketchRNNCollator(
-        max_query_len=max_query_len,
-        max_context_len=max_context_len,
+        max_query_len=cfg.data.max_query_len,
+        max_context_len=cfg.data.max_context_len,
         teacher_forcing_with_eos=cfg.model.teacher_forcing_with_eos,
     )
 
@@ -141,8 +142,8 @@ def main(_) -> None:
         coordinate_mode=cfg.data.coordinate_mode,
     )
     eval_collator = InContextSketchRNNCollator(
-        max_query_len=max_query_len,
-        max_context_len=max_context_len,
+        max_query_len=cfg.data.max_query_len,
+        max_context_len=cfg.data.max_context_len,
     )
     eval_dataloader = DataLoader(
         eval_dataset,

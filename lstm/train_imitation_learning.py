@@ -52,6 +52,7 @@ def _log_qualitative_samples(
     policy: SketchRNN,
     context: torch.Tensor,
     context_lengths: torch.Tensor,
+    split: str,
     cfg: dict,
     step: int,
     device: torch.device,
@@ -117,7 +118,7 @@ def _log_qualitative_samples(
         images.append(wandb.Image(fig, caption=f"step {step + 1} sample {idx}"))
         plt.close(fig)
     if images:
-        wandb.log({"samples/sketches": images}, step=step + 1)
+        wandb.log({f"{split} samples/sketches": images}, step=step + 1)
 
     if prev_mode:
         policy.train()
@@ -301,8 +302,6 @@ def main(_) -> None:
                     step=global_step,
                 )
 
-            break
-
         if batches == 0:
             raise RuntimeError(
                 "No valid batches processed; consider reducing max_seq_len or batch size."
@@ -345,6 +344,16 @@ def main(_) -> None:
             context=eval_query,
             context_lengths=eval_queries_lengths,
             cfg=cfg,
+            split="eval",
+            step=global_step,
+            device=device,
+        )
+        _log_qualitative_samples(
+            policy=model,
+            context=input_queries,
+            context_lengths=input_queries_lengths,
+            cfg=cfg,
+            split="train",
             step=global_step,
             device=device,
         )

@@ -51,7 +51,7 @@ def get_config() -> ConfigDict:
     cfg.checkpoint.save_interval = 10
 
     cfg.eval = ConfigDict()
-    cfg.eval.samples = 4
+    cfg.eval.samples = 64
     cfg.eval.steps = 300
     cfg.eval.interval = 1
     cfg.eval.temperature = 0.65

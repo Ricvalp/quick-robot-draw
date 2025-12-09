@@ -95,7 +95,6 @@
                 "--config=configs/lstm/imitation_learning.py",
                 "--config.data_root=data/single_class/eyeglasses-simplified/",
                 "--config.num_workers=0",
-                "--config.eval_interval=100",
                 "--config.K=0"
             ]
         },
@@ -111,10 +110,10 @@
             },
             "args": [
                 "--config=configs/lstm/in_context_imitation_learning.py",
-                "--config.data.root=data/single-class/eyeglasses-simplified/",
+                "--config.data.root=data/all-classes/train-val-split/",
                 "--config.loader.num_workers=0",
-                "--config.eval.interval=100",
-                "--config.wandb.use=False",
+                "--config.wandb.use=True",
+                "--config.data.K=4"
             ]
         },
         {
@@ -131,7 +130,6 @@
                 "--config=configs/lstm/imitation_learning.py",
                 "--config.data.root=data/single-class/eyeglasses-simplified/",
                 "--config.loader.num_workers=0",
-                "--config.eval.interval=100",
                 "--config.wandb.use=False",
             ]
         },

@@ -38,7 +38,7 @@ def get_config() -> ConfigDict:
     cfg.model.decoder_num_layers = 1
     cfg.model.num_mixtures = 20
     cfg.model.dropout = 0.0
-    cfg.model.teacher_forcing_with_eos = True
+    cfg.model.teacher_forcing_with_eos = False
 
     cfg.kl = ConfigDict()
     cfg.kl.start = 0.0
@@ -59,6 +59,7 @@ def get_config() -> ConfigDict:
     cfg.eval.temperature = 0.65
     cfg.eval.seed = 42
     cfg.eval.greedy = False
+    cfg.eval.eval_on_train = False
 
     cfg.profiling = ConfigDict()
     cfg.profiling.use = False

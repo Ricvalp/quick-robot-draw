@@ -20,7 +20,6 @@ matplotlib.use("Agg")
 import wandb
 from dataset.loader import QuickDrawEpisodes
 from dataset.lstm import InContextSketchRNNCollator
-from diffusion.sampling import tokens_to_figure
 from lstm import SketchRNN, SketchRNNConfig
 from lstm.utils import strokes_to_tokens, trim_strokes_to_eos
 
@@ -68,6 +67,50 @@ def _log_qualitative_samples(
     generator = torch.Generator(device=device)
     generator.manual_seed(cfg.eval.seed + step)
 
+    def _plot_tokens(
+        ax, tokens: torch.Tensor, title: str, coordinate_mode: str
+    ) -> None:
+        """Render `(N, 3)` tokens on the provided axis."""
+        array = tokens.detach().cpu().numpy()
+        coords = (
+            array[:, :2].cumsum(axis=0) if coordinate_mode == "delta" else array[:, :2]
+        )
+        pen_state = array[:, 2]
+        for idx in range(1, coords.shape[0]):
+            start = coords[idx - 1]
+            end = coords[idx]
+            active = pen_state[idx] >= 0.5
+            ax.plot(
+                [start[0], end[0]],
+                [start[1], end[1]],
+                color="black" if active else "tab:red",
+                linewidth=1.5,
+                linestyle="-" if active else "--",
+            )
+        ax.set_title(title)
+        ax.set_aspect("equal")
+        ax.invert_yaxis()
+        ax.axis("off")
+
+    def _split_context_prompts(ctx_tokens: torch.Tensor) -> list[torch.Tensor]:
+        """Split the concatenated context tokens into individual prompt sketches."""
+        sketches = []
+        current = []
+        for token in ctx_tokens:
+            if token[5] > 0.5:  # reset token marks the end of the context block
+                if current:
+                    sketches.append(torch.stack(current))
+                break
+            if token[4] > 0.5:  # separator between sketches
+                if current:
+                    sketches.append(torch.stack(current))
+                    current = []
+                continue
+            current.append(token[[0, 1, 2]])
+        if current:
+            sketches.append(torch.stack(current))
+        return sketches[: cfg.data.K]
+
     samples = policy.sample(
         num_steps=cfg.eval.steps,
         contexts=context.to(device=device),
@@ -82,8 +125,37 @@ def _log_qualitative_samples(
 
     images = []
     for idx, seq in enumerate(trimmed):
-        tokens = strokes_to_tokens(seq)
-        fig = tokens_to_figure(tokens, coordinate_mode="delta")
+        ctx_len = int(context_lengths[idx].item())
+        ctx_tokens = context[idx, :ctx_len].detach().cpu()
+        prompts = _split_context_prompts(ctx_tokens)
+        sample_tokens = strokes_to_tokens(seq)
+
+        total_plots = len(prompts) + 1  # all context sketches + reconstruction
+        cols = min(total_plots, 3)
+        rows = (total_plots + cols - 1) // cols
+
+        fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 4 * rows), dpi=150)
+        axes = list(axes.flat) if hasattr(axes, "flat") else [axes]
+
+        for prompt_idx, prompt_tokens in enumerate(prompts):
+            _plot_tokens(
+                axes[prompt_idx],
+                prompt_tokens,
+                f"Context {prompt_idx + 1}",
+                cfg.data.coordinate_mode,
+            )
+
+        _plot_tokens(
+            axes[len(prompts)],
+            sample_tokens,
+            "Reconstruction",
+            "delta",
+        )
+
+        for ax in axes[total_plots:]:
+            ax.axis("off")
+
+        fig.tight_layout()
         images.append(wandb.Image(fig, caption=f"step {step + 1} sample {idx}"))
         plt.close(fig)
     if images:
@@ -133,7 +205,7 @@ def main(_) -> None:
 
     eval_dataset = QuickDrawEpisodes(
         root=cfg.data.root,
-        split=cfg.data.split,
+        split="val" if not cfg.eval.eval_on_train else cfg.data.split,
         K=cfg.data.K,
         backend=cfg.data.backend,
         max_seq_len=cfg.data.max_seq_len,

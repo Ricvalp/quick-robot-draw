@@ -31,7 +31,7 @@ def get_config() -> ConfigDict:
     cfg.storage.compression = "zstd"
     cfg.storage.shards = 64
 
-    cfg.families = ["eyeglasses", "basketball", "airplane", "door", "t-shirt"]
+    cfg.families = None  # ["eyeglasses", "basketball", "airplane", "door", "t-shirt"]
     cfg.max_sketches_per_file = 50000
 
     cfg.cache = ConfigDict()
@@ -41,8 +41,8 @@ def get_config() -> ConfigDict:
     cfg.seed = 1234
 
     cfg.split = ConfigDict()
-    cfg.split.train_ratio = 1.0
-    cfg.split.val_ratio = 0.0
+    cfg.split.train_ratio = 0.9
+    cfg.split.val_ratio = 0.1
     cfg.split.test_ratio = 0.0
 
     cfg.num_prebuilt_episodes = 0

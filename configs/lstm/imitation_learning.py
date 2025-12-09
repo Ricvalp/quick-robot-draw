@@ -57,6 +57,7 @@ def get_config() -> ConfigDict:
     cfg.eval.temperature = 0.65
     cfg.eval.seed = 42
     cfg.eval.greedy = False
+    cfg.eval.eval_on_train = False
 
     cfg.profiling = ConfigDict()
     cfg.profiling.use = False

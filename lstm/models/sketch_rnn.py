@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-__all__ = ["SketchRNNConfig", "SketchRNN", "SketchRNNUnconditional"]
+__all__ = ["SketchRNNConfig", "SketchRNN"]
 
 
 @dataclass
@@ -390,38 +390,3 @@ class SketchRNN(nn.Module):
             dim=-1,
         )
         return stroke
-
-
-class SketchRNNUnconditional(SketchRNN):
-    """SketchRNN model without encoder for unconditional generation."""
-
-    def __init__(self, cfg: SketchRNNConfig) -> None:
-        super().__init__(cfg)
-
-    def forward(
-        self,
-        strokes: torch.Tensor,
-        lengths: torch.Tensor,
-    ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        pass
-
-    def compute_loss(
-        self,
-        strokes: torch.Tensor,
-        lengths: torch.Tensor,
-    ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        pass
-
-    def sample(
-        self,
-        num_steps: int,
-        *,
-        num_samples: int = 1,
-        temperature: float = 1.0,
-        greedy: bool = False,
-        generator: Optional[torch.Generator] = None,
-    ) -> torch.Tensor:
-        pass
-
-    def _sample_step(self, params, temperature, greedy, generator):
-        pass

@@ -133,7 +133,7 @@ def main(_) -> None:
 
     eval_dataset = QuickDrawEpisodes(
         root=cfg.data.root,
-        split=cfg.data.split,
+        split="eval",  # cfg.data.split if cfg.eval.eval_on_train else "eval",
         K=cfg.data.K,
         backend=cfg.data.backend,
         max_seq_len=cfg.data.max_seq_len,

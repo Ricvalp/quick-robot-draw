@@ -160,7 +160,7 @@ def main(_) -> None:
 
     eval_dataset = QuickDrawEpisodes(
         root=cfg.data.root,
-        split=cfg.data.split,
+        split="val",  # cfg.data.split if cfg.eval.eval_on_train else "val",
         K=cfg.data.K,
         backend=cfg.data.backend,
         max_query_len=cfg.data.max_query_len,
@@ -301,6 +301,8 @@ def main(_) -> None:
                     step=global_step,
                 )
 
+            break
+
         if batches == 0:
             raise RuntimeError(
                 "No valid batches processed; consider reducing max_seq_len or batch size."
@@ -337,6 +339,7 @@ def main(_) -> None:
             eval_query = eval_batch["input_queries"].to(device)
             eval_queries_lengths = eval_batch["input_queries_lengths"].to(device)
 
+        print("evaluating qualitative samples...")
         _log_qualitative_samples(
             policy=model,
             context=eval_query,

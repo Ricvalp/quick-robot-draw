@@ -52,6 +52,7 @@ def _log_qualitative_samples(
     policy: SketchRNN,
     context: torch.Tensor,
     context_lengths: torch.Tensor,
+    split: str,
     cfg: dict,
     step: int,
     device: torch.device,
@@ -159,7 +160,7 @@ def _log_qualitative_samples(
         images.append(wandb.Image(fig, caption=f"step {step + 1} sample {idx}"))
         plt.close(fig)
     if images:
-        wandb.log({"samples/sketches": images}, step=step + 1)
+        wandb.log({f"{split} samples/sketches": images}, step=step + 1)
 
     if prev_mode:
         policy.train()
@@ -291,6 +292,11 @@ def main(_) -> None:
         )
         wandb.log({"model/parameters": total_params}, step=0)
 
+        wandb.log({"train/manifest": wandb.Table(dataframe=dataset.manifest)}, step=0)
+        wandb.log(
+            {"eval/manifest": wandb.Table(dataframe=eval_dataset.manifest)}, step=0
+        )
+
     global_step = 0
 
     for epoch in range(cfg.training.epochs):
@@ -383,9 +389,19 @@ def main(_) -> None:
 
         _log_qualitative_samples(
             policy=model,
+            context=contexts,
+            context_lengths=contexts_lengths,
+            cfg=cfg,
+            split=cfg.data.split,
+            step=global_step,
+            device=device,
+        )
+        _log_qualitative_samples(
+            policy=model,
             context=eval_contexts,
             context_lengths=eval_contexts_lengths,
             cfg=cfg,
+            split="eval",
             step=global_step,
             device=device,
         )

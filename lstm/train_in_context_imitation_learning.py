@@ -288,14 +288,13 @@ def main(_) -> None:
         wandb.init(
             project=cfg.wandb.project,
             entity=cfg.wandb.entity,
-            config={**cfg.to_dict(), "model": sketch_config.__dict__},
+            config={
+                **cfg.to_dict(),
+                "model": sketch_config.__dict__,
+                "manifest": dataset.manifest,
+            },
         )
         wandb.log({"model/parameters": total_params}, step=0)
-
-        wandb.log({"train/manifest": wandb.Table(dataframe=dataset.manifest)}, step=0)
-        wandb.log(
-            {"eval/manifest": wandb.Table(dataframe=eval_dataset.manifest)}, step=0
-        )
 
     global_step = 0
 

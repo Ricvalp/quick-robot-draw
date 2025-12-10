@@ -200,8 +200,8 @@ def main(_) -> None:
         pin_memory=True,
         drop_last=True,
         collate_fn=collator,
-        # prefetch_factor=4,
-        # persistent_workers=True,
+        prefetch_factor=4,
+        persistent_workers=True,
     )
 
     eval_dataset = QuickDrawEpisodes(
@@ -308,10 +308,10 @@ def main(_) -> None:
 
         for batch in progress:
 
-            queries = batch["queries"].to(device)
-            contexts = batch["contexts"].to(device)
-            queries_lengths = batch["queries_lengths"].to(device)
-            contexts_lengths = batch["contexts_lengths"].to(device)
+            queries = batch["queries"].to(device, non_blocking=True)
+            contexts = batch["contexts"].to(device, non_blocking=True)
+            queries_lengths = batch["queries_lengths"].to(device, non_blocking=True)
+            contexts_lengths = batch["contexts_lengths"].to(device, non_blocking=True)
 
             optimizer.zero_grad(set_to_none=True)
             kl_weight = compute_kl_weight(global_step, cfg)

@@ -376,34 +376,36 @@ def main(_) -> None:
                 checkpoint_path,
             )
 
-        try:
-            eval_batch = next(eval_iterator)
-            eval_contexts = eval_batch["contexts"].to(device)
-            eval_contexts_lengths = eval_batch["contexts_lengths"].to(device)
-        except StopIteration:
-            eval_iterator = iter(eval_dataloader)
-            eval_batch = next(eval_iterator)
-            eval_contexts = eval_batch["contexts"].to(device)
-            eval_contexts_lengths = eval_batch["contexts_lengths"].to(device)
+        if epoch + 1 % cfg.eval.interval == 0:
 
-        _log_qualitative_samples(
-            policy=model,
-            context=contexts,
-            context_lengths=contexts_lengths,
-            cfg=cfg,
-            split=cfg.data.split,
-            step=global_step,
-            device=device,
-        )
-        _log_qualitative_samples(
-            policy=model,
-            context=eval_contexts,
-            context_lengths=eval_contexts_lengths,
-            cfg=cfg,
-            split="eval",
-            step=global_step,
-            device=device,
-        )
+            try:
+                eval_batch = next(eval_iterator)
+                eval_contexts = eval_batch["contexts"].to(device)
+                eval_contexts_lengths = eval_batch["contexts_lengths"].to(device)
+            except StopIteration:
+                eval_iterator = iter(eval_dataloader)
+                eval_batch = next(eval_iterator)
+                eval_contexts = eval_batch["contexts"].to(device)
+                eval_contexts_lengths = eval_batch["contexts_lengths"].to(device)
+
+            _log_qualitative_samples(
+                policy=model,
+                context=contexts,
+                context_lengths=contexts_lengths,
+                cfg=cfg,
+                split=cfg.data.split,
+                step=global_step,
+                device=device,
+            )
+            _log_qualitative_samples(
+                policy=model,
+                context=eval_contexts,
+                context_lengths=eval_contexts_lengths,
+                cfg=cfg,
+                split="eval",
+                step=global_step,
+                device=device,
+            )
 
     if cfg.wandb.project:
         wandb.finish()

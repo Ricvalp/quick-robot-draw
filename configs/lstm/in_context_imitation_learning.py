@@ -55,7 +55,7 @@ def get_config() -> ConfigDict:
     cfg.eval = ConfigDict()
     cfg.eval.samples = 4
     cfg.eval.steps = 1000
-    cfg.eval.interval = 1
+    cfg.eval.interval = 5
     cfg.eval.temperature = 0.65
     cfg.eval.seed = 42
     cfg.eval.greedy = False

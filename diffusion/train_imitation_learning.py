@@ -22,11 +22,7 @@ import matplotlib.pyplot as plt
 from dataset.diffusion import DiffusionCollator
 from dataset.loader import QuickDrawEpisodes
 from diffusion import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
-from diffusion.sampling import (
-    make_start_token,
-    sample_quickdraw_tokens_unconditional,
-    tokens_to_figure,
-)
+from diffusion.sampling import sample_quickdraw_tokens_unconditional, tokens_to_figure
 
 
 def load_config(_CONFIG_FILE: str) -> ConfigDict:
@@ -50,20 +46,24 @@ def _log_qualitative_samples(
 ) -> None:
     """Sample sketches and push them to WandB for quick visual inspection."""
 
-    if cfg.wandb_project is None or cfg.eval_samples <= 0:
-        return
+    # if cfg.wandb.use is False or cfg.eval.samples <= 0:
+    #     return
 
     prev_mode = policy.training
     policy.eval()
 
     generator = torch.Generator(device=device)
-    generator.manual_seed(cfg.eval_sample_seed + global_step)
+    generator.manual_seed(cfg.eval.seed + global_step)
 
-    start = make_start_token(cfg.eval_samples, policy.cfg.point_feature_dim, device)
+    start = (
+        torch.tensor([[0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]])
+        .tile((cfg.eval.samples, 1, 1))
+        .to(device=device)
+    )
     samples = sample_quickdraw_tokens_unconditional(
         policy,
-        cfg.eval_max_tokens,
-        start_token=start,
+        cfg.eval.steps,
+        context=start,
         generator=generator,
     )
 
@@ -82,69 +82,71 @@ def _log_qualitative_samples(
 
 
 _CONFIG_FILE = config_flags.DEFINE_config_file(
-    "config", default="diffusion_policy/configs/imitation_learning.py"
+    "config", default="configs/diffusion/imitation_learning.py"
 )
 
 
 def main(_) -> None:
     cfg = load_config(_CONFIG_FILE)
-    set_seed(cfg.seed)
-    device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
+    set_seed(cfg.run.seed)
+    device = torch.device(cfg.run.device if torch.cuda.is_available() else "cpu")
 
     dataset = QuickDrawEpisodes(
-        root=cfg.data_root,
-        split=cfg.split,
-        K=cfg.K,
-        backend=cfg.backend,
-        max_seq_len=cfg.max_seq_len,
+        root=cfg.data.root,
+        split=cfg.data.split,
+        K=cfg.data.K,
+        backend=cfg.data.backend,
+        max_seq_len=cfg.data.max_query_len,
+        retry_on_overflow=True,
         augment=False,
-        seed=cfg.seed,
+        seed=cfg.run.seed,
         coordinate_mode="absolute",
     )
-    collator = DiffusionCollator(horizon=cfg.horizon, seed=cfg.seed)
+
+    collator = DiffusionCollator(horizon=cfg.model.horizon, seed=cfg.run.seed)
     dataloader = DataLoader(
         dataset,
-        batch_size=cfg.batch_size,
+        batch_size=cfg.loader.batch_size,
         shuffle=True,
-        num_workers=cfg.num_workers,
+        num_workers=cfg.loader.num_workers,
         pin_memory=True,
         drop_last=True,
         collate_fn=collator,
     )
 
     noise_scheduler_kwargs = {
-        "num_train_timesteps": cfg.num_train_timesteps,
-        "beta_start": cfg.beta_start,
-        "beta_end": cfg.beta_end,
-        "beta_schedule": cfg.beta_schedule,
+        "num_train_timesteps": cfg.model.num_train_timesteps,
+        "beta_start": cfg.model.beta_start,
+        "beta_end": cfg.model.beta_end,
+        "beta_schedule": cfg.model.beta_schedule,
     }
 
     policy_cfg = DiTDiffusionPolicyConfig(
         context_length=0,
-        horizon=cfg.horizon,
+        horizon=cfg.model.horizon,
         point_feature_dim=7,  # 2 positions + 1 pen state + 4 special tokens
-        action_dim=7,  # x, y, pen
-        hidden_dim=cfg.hidden_dim,
-        num_layers=cfg.num_layers,
-        num_heads=cfg.num_heads,
-        mlp_dim=cfg.mlp_dim,
-        dropout=cfg.dropout,
-        attention_dropout=cfg.attention_dropout,
-        num_inference_steps=cfg.num_inference_steps,
+        action_dim=7,
+        hidden_dim=cfg.model.hidden_dim,
+        num_layers=cfg.model.num_layers,
+        num_heads=cfg.model.num_heads,
+        mlp_dim=cfg.model.mlp_dim,
+        dropout=cfg.model.dropout,
+        attention_dropout=cfg.model.attention_dropout,
+        num_inference_steps=cfg.eval.num_inference_steps,
         noise_scheduler_kwargs=noise_scheduler_kwargs,
     )
     policy = DiTDiffusionPolicy(policy_cfg).to(device)
     optimizer = torch.optim.AdamW(
-        policy.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+        policy.parameters(), lr=cfg.training.lr, weight_decay=cfg.training.weight_decay
     )
 
-    save_dir = Path(cfg.checkpoint_dir)
+    save_dir = Path(cfg.checkpoint.dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    if cfg.wandb_use:
+    if cfg.wandb.use:
         wandb.init(
-            project=cfg.wandb_project,
-            entity=cfg.wandb_entity,
+            project=cfg.wandb.project,
+            entity=cfg.wandb.entity,
             config={
                 **vars(cfg),
                 "model": policy_cfg,
@@ -159,11 +161,13 @@ def main(_) -> None:
 
     global_step = 0
 
-    for epoch in range(cfg.epochs):
+    for epoch in range(cfg.training.epochs):
         policy.train()
         running_loss = 0.0
         step = 0
-        progress = tqdm(dataloader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False)
+        progress = tqdm(
+            dataloader, desc=f"Epoch {epoch+1}/{cfg.training.epochs}", leave=False
+        )
         for batch in progress:
 
             batch = {k: v.to(device) for k, v in batch.items()}
@@ -182,32 +186,33 @@ def main(_) -> None:
             progress.set_postfix({"mse": metrics["mse"]})
 
             if (
-                cfg.wandb_use
-                and cfg.loss_log_every > 0
-                and global_step % cfg.loss_log_every == 0
+                cfg.wandb.use
+                and cfg.logging.loss_log_every > 0
+                and global_step % cfg.logging.loss_log_every == 0
             ):
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
 
-            if global_step % cfg.save_checkpoint_every == 0:
-                checkpoint_path = save_dir / f"policy_epoch_{global_step:06d}.pt"
-                torch.save(
-                    {
-                        "epoch": epoch + 1,
-                        "model_state_dict": policy.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "config": policy_cfg,
-                    },
-                    checkpoint_path,
-                )
+            # if global_step % cfg.checkpoint.save_interval == 0:
+
+        checkpoint_path = save_dir / f"policy_epoch_{global_step:06d}.pt"
+        torch.save(
+            {
+                "epoch": epoch + 1,
+                "model_state_dict": policy.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "config": policy_cfg,
+            },
+            checkpoint_path,
+        )
 
         avg_loss = running_loss / step
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
-        if cfg.wandb_use:
+        if cfg.wandb.use:
             wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=global_step)
 
         _log_qualitative_samples(policy, cfg, global_step, device)
 
-    if cfg.wandb_project:
+    if cfg.wandb.project:
         wandb.finish()
 
 

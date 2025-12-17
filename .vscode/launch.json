@@ -5,101 +5,26 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Cache Images Dataset",
+            "name": "Train ResNet18 for FID",
             "type": "debugpy",
             "request": "launch",
-            "program": "scripts/cache_images.py",
+            "program": "fid/train_resnet18.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "."
             },
             "args": [
-                "--config=fid/configs/cache.py",
-                "--config.dataset_path=data/",
-                "--config.output_dir=/mnt/external_storage/robotics/quick-robot-draw/imgs/",
-                "--config.shard_size=10000",
-                "--config.family_to_label_path=fid/family_to_label.yaml"
-            ]
-        },
-        {
-            "name": "Visualize Episode",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "scripts/visualize_episode.py",
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "env": {
-                "PYTHONPATH": "."
-            },
-            "args": [
-                "--root", "data/",
-                "--split", "train",
-                "--backend", "lmdb",
-                "--K", "5",
-                "--index", "3",
-                "--save-dir", "figures",
-                "--no-show"
-            ]
-        },
-        {
-            "name": "Test Loader",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "scripts/test_dataloader.py",
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "env": {
-                "PYTHONPATH": "."
-            },
-            "args": [
-                "--root", "data/",
-                "--split", "train",
-                "--backend", "lmdb",
-                "--K", "5",
-                "--max-seq-len", "1024",
-                "--batch-size", "8"
-            ]
-        },
-        {
-            "name": "Train QuickDraw Diffusion",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "diffusion_policy/train_imitation_learning.py",
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "env": {
-                "PYTHONPATH": "."
-            },
-            "args": [
-                "--config=diffusion_policy/configs/imitation_learning.py",
-                "--config.data_root=data/single_class/alarm_clock/",
-                "--config.horizon=8",
+                "--config=fid/configs/train.py",
+                "--config.data_dir=/mnt/external_storage/robotics/quick-robot-draw/imgs/",
+                "--config.batch_size=128",
+                "--config.num_epochs=10",
                 "--config.num_workers=0",
-                "--config.checkpoint_dir=diffusion_policy/checkpoints/imitation_learning/",
-                "--config.wandb_use=False",
-                "--config.loss_log_every=50"
+                "--config.wandb_logging.use=False",
             ]
         },
-                {
-            "name": "Train QuickDraw LSTM",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "lstm/train_imitation_learning.py",
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "env": {
-                "PYTHONPATH": "."
-            },
-            "args": [
-                "--config=configs/lstm/imitation_learning.py",
-                "--config.data_root=data/single_class/eyeglasses-simplified/",
-                "--config.num_workers=0",
-                "--config.K=0"
-            ]
-        },
-            {
-            "name": "Train In-Context Imitation Learning QuickDraw LSTM",
+        {
+            "name": "Train In-Context Imitation Learning LSTM",
             "type": "debugpy",
             "request": "launch",
             "program": "lstm/train_in_context_imitation_learning.py",
@@ -117,7 +42,7 @@
             ]
         },
         {
-            "name": "Train Imitation Learning QuickDraw LSTM",
+            "name": "Train Imitation Learning LSTM",
             "type": "debugpy",
             "request": "launch",
             "program": "lstm/train_imitation_learning.py",
@@ -151,23 +76,23 @@
             ]
         },
         {
-            "name": "Train ResNet18 for FID",
+            "name": "Train Imitation Learning Diffusion",
             "type": "debugpy",
             "request": "launch",
-            "program": "fid/train_resnet18.py",
+            "program": "diffusion/train_imitation_learning.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "."
             },
             "args": [
-                "--config=fid/configs/train.py",
-                "--config.data_dir=/mnt/external_storage/robotics/quick-robot-draw/imgs/",
-                "--config.batch_size=128",
-                "--config.num_epochs=10",
-                "--config.num_workers=0",
-                "--config.wandb_logging.use=False",
+                "--config=configs/diffusion/imitation_learning.py",
+                "--config.data.root=data/all-classes/train-only/",
+                "--config.model.horizon=8",
+                "--config.loader.num_workers=0",
+                "--config.checkpoint.dir=diffusion_policy/checkpoints/imitation_learning/",
+                "--config.wandb.use=False",
             ]
-        }
+        },
     ]
 }

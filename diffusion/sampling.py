@@ -11,7 +11,6 @@ import torch
 
 __all__ = [
     "InContextDiffusionCollatorEval",
-    "make_start_token",
     "sample_quickdraw_tokens",
     "sample_quickdraw_tokens_unconditional",
     "tokens_to_figure",
@@ -51,27 +50,12 @@ class InContextDiffusionCollatorEval:
         return {"points": points, "mask": mask}
 
 
-def make_start_token(
-    batch_size: int,
-    feature_dim: int,
-    device: torch.device,
-    *,
-    pen_down: bool = False,
-) -> torch.Tensor:
-    """Return a batch of `[0, 0, pen]` start tokens centered at the origin."""
-
-    token = torch.zeros(batch_size, 1, feature_dim, device=device)
-    if pen_down:
-        token[..., 2] = 1.0
-    return token
-
-
 @torch.no_grad()
 def sample_quickdraw_tokens_unconditional(
     policy: torch.nn.Module,
     max_tokens: int,
     *,
-    start_token: Optional[torch.Tensor] = None,
+    context: Optional[torch.Tensor] = None,
     generator: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
     """Autoregressively sample `total_tokens` conditioned on the growing context."""
@@ -79,14 +63,14 @@ def sample_quickdraw_tokens_unconditional(
     device = next(policy.parameters()).device
     feature_dim = policy.cfg.point_feature_dim
 
-    if start_token is None:
-        context = make_start_token(1, feature_dim, device)
+    if context is None:
+        context = torch.tensor([[0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]]).to(device=device)
     else:
-        if start_token.shape[-1] != feature_dim:
+        if context.shape[-1] != feature_dim:
             raise ValueError(
-                f"start_token feature dim {start_token.shape[-1]} != {feature_dim}."
+                f"context feature dim {context.shape[-1]} != {feature_dim}."
             )
-        context = start_token.to(device=device)
+        context = context.to(device=device)
 
     horizon = policy.cfg.horizon
     num_chunks = math.ceil(max_tokens / horizon)

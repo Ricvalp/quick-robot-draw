@@ -48,7 +48,7 @@ def get_config() -> ConfigDict:
 
     cfg.checkpoint = ConfigDict()
     cfg.checkpoint.dir = "lstm/checkpoints"
-    cfg.checkpoint.save_interval = 10
+    cfg.checkpoint.save_interval = None
 
     cfg.eval = ConfigDict()
     cfg.eval.samples = 64

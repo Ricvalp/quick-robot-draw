@@ -58,7 +58,7 @@ def sample_quickdraw_tokens_unconditional(
     context: Optional[torch.Tensor] = None,
     generator: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
-    """Autoregressively sample `total_tokens` conditioned on the growing context."""
+    """Sample `total_tokens` conditioned on the growing context."""
 
     device = next(policy.parameters()).device
     feature_dim = policy.cfg.point_feature_dim
@@ -90,7 +90,7 @@ def sample_quickdraw_tokens_unconditional(
 def sample_quickdraw_tokens(
     policy: torch.nn.Module,
     max_tokens: int,
-    context: torch.Tensor,
+    demos: torch.Tensor,
     *,
     generator: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
@@ -99,26 +99,42 @@ def sample_quickdraw_tokens(
     device = next(policy.parameters()).device
     feature_dim = policy.cfg.point_feature_dim
 
-    if context["points"].shape[-1] != feature_dim:
+    if demos["context"].shape[-1] != feature_dim:
         raise ValueError(
-            f"start_token feature dim {context['points'].shape[-1]} != {feature_dim}."
+            f"start_token feature dim {demos['context'].shape[-1]} != {feature_dim}."
         )
 
-    context = {key: v.to(device) for key, v in context.items()}
+    demos = {key: v.to(device) for key, v in demos.items()}
 
     horizon = policy.cfg.horizon
     max_chunks = math.ceil(max_tokens / horizon)
     samples: list[torch.Tensor] = []
 
+    context = demos["context"]
+    context_mask = demos["context_mask"]
+    history = torch.tensor([[0.0, 0.0, 0.0, 0.0, 1.0, 0.0]], device=device).tile(
+        (context.shape[0], 1, 1)
+    )
+
+    history_mask = torch.ones(history.shape[:2]).to(device=device).bool()
+    history_mask = torch.cat(
+        [history_mask, torch.ones(history.shape[0], horizon).to(device).bool()], dim=1
+    )
+
     for _ in range(max_chunks):
-        actions = policy.sample_actions(observation=context, generator=generator)
+        actions = policy.sample_actions(
+            context=context,
+            context_mask=context_mask,
+            history=history,
+            history_mask=history_mask,
+            generator=generator,
+        )
         samples.append(actions)
-        context = {
-            "points": torch.cat([context["points"], actions], dim=1),
-            "mask": torch.cat(
-                [context["mask"], torch.ones(actions.shape[:2]).to(device)], dim=1
-            ),
-        }
+
+        history = torch.cat([history, actions], dim=1)
+        history_mask = torch.cat(
+            [history_mask, torch.ones(actions.shape[:2]).to(device).bool()], dim=1
+        )
 
     generated = torch.cat(samples, dim=1)
     sketches = clean_sketches(generated)
@@ -129,7 +145,7 @@ def clean_sketches(generated):
 
     sketches = []
     for sketch in generated:
-        end_idx = (sketch[:, 6] >= 0.5).nonzero(as_tuple=True)[0]
+        end_idx = (sketch[:, 5] >= 0.5).nonzero(as_tuple=True)[0]
         if end_idx.numel() > 0:
             end_idx = end_idx[0]
         else:

@@ -59,20 +59,20 @@
             ]
         },
         {
-            "name": "Train In-Context Imitation Learning Diffusion",
+            "name": "Train Encoder Decoder In-Context Imitation Learning Diffusion",
             "type": "debugpy",
             "request": "launch",
-            "program": "diffusion_policy/train_in_context_imitation_learning.py",
+            "program": "diffusion/train_encoder_decoder_in_context_imitation_learning.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "."
             },
             "args": [
-                "--config=diffusion_policy/configs/in_context_imitation_learning.py",
-                "--config.data_root=data/",
-                "--config.num_workers=0",
-                "--config.eval_interval=100"
+                "--config=configs/diffusion/encoder_decoder_in_context_imitation_learning.py",
+                "--config.data.root=data/single-class/eyeglasses-simplified/",
+                "--config.loader.num_workers=0",
+                "--config.eval.interval=100"
             ]
         },
         {

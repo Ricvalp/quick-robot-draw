@@ -1,3 +1,13 @@
-from .policies import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
+from .policies import (
+    DiTDiffusionPolicy,
+    DiTDiffusionPolicyConfig,
+    DiTEncDecDiffusionPolicy,
+    DiTEncDecDiffusionPolicyConfig,
+)
 
-__all__ = ["DiTDiffusionPolicy", "DiTDiffusionPolicyConfig"]
+__all__ = [
+    "DiTDiffusionPolicy",
+    "DiTDiffusionPolicyConfig",
+    "DiTEncDecDiffusionPolicy",
+    "DiTEncDecDiffusionPolicyConfig",
+]

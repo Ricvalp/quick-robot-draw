@@ -39,11 +39,12 @@ def set_seed(seed: int) -> None:
 def _log_qualitative_samples(
     policy: DiTEncDecDiffusionPolicy,
     context: torch.Tensor,
+    split: str,
     cfg: dict,
     step: int,
     device: torch.device,
 ) -> None:
-    """Sample sketches and push them to WandB for quick visual inspection."""
+    """Sample sketches and push them to WandB for visual inspection."""
 
     if (not cfg.wandb.use) or cfg.wandb.project is None or cfg.eval.samples <= 0:
         return
@@ -69,7 +70,7 @@ def _log_qualitative_samples(
         plt.close(fig)
 
     if images:
-        wandb.log({"samples/sketches": images}, step=step + 1)
+        wandb.log({f"samples/sketches/{split}": images}, step=step + 1)
 
     if prev_mode:
         policy.train()
@@ -217,6 +218,16 @@ def main(_) -> None:
             cfg=cfg,
             step=global_step,
             device=device,
+            split="eval",
+        )
+
+        _log_qualitative_samples(
+            policy=policy,
+            context=batch,
+            cfg=cfg,
+            step=global_step,
+            device=device,
+            split="train",
         )
 
         checkpoint_path = save_dir / f"policy_epoch_{epoch+1:03d}.pt"

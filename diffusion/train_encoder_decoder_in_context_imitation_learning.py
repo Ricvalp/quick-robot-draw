@@ -20,7 +20,7 @@ import wandb
 from dataset.diffusion import ContextQueryInContextDiffusionCollator
 from dataset.loader import QuickDrawEpisodes
 from diffusion import DiTEncDecDiffusionPolicy, DiTEncDecDiffusionPolicyConfig
-from diffusion.sampling import sample_quickdraw_tokens, tokens_to_figure
+from diffusion.sampling import sample_quickdraw_tokens
 
 
 def load_config(_CONFIG_FILE: str) -> ConfigDict:
@@ -38,7 +38,7 @@ def set_seed(seed: int) -> None:
 
 def _log_qualitative_samples(
     policy: DiTEncDecDiffusionPolicy,
-    context: torch.Tensor,
+    context: dict,
     split: str,
     cfg: dict,
     step: int,
@@ -62,10 +62,83 @@ def _log_qualitative_samples(
         generator=generator,
     )
 
+    def _plot_tokens(
+        ax, tokens: torch.Tensor, title: str, coordinate_mode: str
+    ) -> None:
+        """Render `(N, 3)` tokens on the provided axis."""
+        array = tokens.detach().cpu().numpy()
+        coords = (
+            array[:, :2].cumsum(axis=0) if coordinate_mode == "delta" else array[:, :2]
+        )
+        pen_state = array[:, 2]
+        for token_idx in range(1, coords.shape[0]):
+            start = coords[token_idx - 1]
+            end = coords[token_idx]
+            active = pen_state[token_idx] >= 0.5
+            ax.plot(
+                [start[0], end[0]],
+                [start[1], end[1]],
+                color="black" if active else "tab:red",
+                linewidth=1.5,
+                linestyle="-" if active else "--",
+            )
+        ax.set_title(title)
+        ax.set_aspect("equal")
+        ax.invert_yaxis()
+        ax.axis("off")
+
+    def _split_context_prompts(ctx_tokens: torch.Tensor) -> list[torch.Tensor]:
+        """Split the concatenated context tokens into individual prompt sketches."""
+        sketches = []
+        current = []
+        for token in ctx_tokens:
+            if token[5] > 0.5:  # stop token marks the end of the episode
+                break
+            if token[4] > 0.5:  # separator between sketches
+                if current:
+                    sketches.append(torch.stack(current))
+                    current = []
+                continue
+            current.append(token[[0, 1, 2]])
+        if current:
+            sketches.append(torch.stack(current))
+        return sketches[: cfg.data.K]
+
     images = []
     batch_size = len(samples)
     for idx in range(batch_size):
-        fig = tokens_to_figure(samples[idx], coordinate_mode="absolute")
+        ctx_tokens = context["context"][idx]
+        ctx_mask = context["context_mask"][idx]
+        valid_ctx = ctx_tokens[ctx_mask].detach().cpu()
+        prompts = _split_context_prompts(valid_ctx)
+        sample_tokens = samples[idx]
+
+        total_plots = len(prompts) + 1
+        cols = min(total_plots, 3)
+        rows = (total_plots + cols - 1) // cols
+
+        fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 4 * rows), dpi=150)
+        axes = list(axes.flat) if hasattr(axes, "flat") else [axes]
+
+        for prompt_idx, prompt_tokens in enumerate(prompts):
+            _plot_tokens(
+                axes[prompt_idx],
+                prompt_tokens,
+                f"Context {prompt_idx + 1}",
+                cfg.data.coordinate_mode,
+            )
+
+        _plot_tokens(
+            axes[len(prompts)],
+            sample_tokens,
+            "Sample",
+            cfg.data.coordinate_mode,
+        )
+
+        for ax in axes[total_plots:]:
+            ax.axis("off")
+
+        fig.tight_layout()
         images.append(wandb.Image(fig, caption=f"step {step + 1} sample {idx}"))
         plt.close(fig)
 

@@ -6,8 +6,8 @@ from ml_collections import ConfigDict, config_flags
 from sklearn.manifold import TSNE
 from tqdm import tqdm
 
-from fid import get_cached_loader
-from fid.fid_resnet18 import ResNet18FeatureExtractor, compute_fid
+from metrics import get_cached_loader
+from metrics.resnet18 import ResNet18FeatureExtractor, compute_fid
 
 
 def load_cfgs(_CONFIG_FILE: str) -> ConfigDict:

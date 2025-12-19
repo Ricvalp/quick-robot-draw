@@ -11,7 +11,6 @@ def get_config() -> ConfigDict:
     cfg.num_workers = 4
     cfg.learning_rate = 1e-3
     cfg.num_epochs = 10
-    cfg.log_interval = 100
     cfg.val_steps_per_epoch = 1000
     cfg.save_interval = 10000
     cfg.checkpoint_dir = "fid/checkpoints/"

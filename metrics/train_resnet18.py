@@ -12,9 +12,11 @@ except ImportError:
 
 from torchvision.models import resnet18
 
-from fid import get_cached_loader
+from metrics import get_cached_loader
 
-_CONFIG_FILE = config_flags.DEFINE_config_file("config", default="fid/configs/train.py")
+_CONFIG_FILE = config_flags.DEFINE_config_file(
+    "config", default="/configs/fid/train.py"
+)
 
 
 def main(_):
@@ -36,6 +38,7 @@ def main(_):
 
     model = resnet18(pretrained=False)
     model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+    model.fc = nn.Linear(model.fc.in_features, 345)  # Assuming 344 classes
     model = model.to(device)
 
     total_params = sum(p.numel() for p in model.parameters())

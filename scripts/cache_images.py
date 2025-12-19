@@ -8,7 +8,7 @@ from ml_collections import config_flags
 from tqdm import tqdm
 
 from dataset import QuickDrawEpisodes, RasterizerConfig
-from fid import EpisodeToImage
+from metrics import EpisodeToImage
 
 
 def write_shards(

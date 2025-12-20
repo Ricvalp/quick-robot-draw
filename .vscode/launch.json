@@ -94,5 +94,24 @@
                 "--config.wandb.use=False",
             ]
         },
+        {
+            "name": "Build FAISS Index",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "metrics/build_faiss_index.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "."
+            },
+            "args": [
+                "--config=configs/metrics/build_faiss_index.py",
+                "--config.data.root=data/all-classes/train-only/",
+                "--config.model.horizon=8",
+                "--config.loader.num_workers=0",
+                "--config.checkpoint.dir=diffusion_policy/checkpoints/imitation_learning/",
+                "--config.wandb.use=False",
+            ]
+        },
     ]
 }

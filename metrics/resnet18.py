@@ -15,7 +15,7 @@ __all__ = [
 class ResNet18FeatureExtractor(nn.Module):
     def __init__(self, prertained_checkpoint_path: Union[str, Path]) -> None:
         super().__init__()
-        self.model = resnet18(pretrained=False)
+        self.model = resnet18(pretrained=False, num_classes=345)
         self.model.conv1 = nn.Conv2d(
             1, 64, kernel_size=7, stride=2, padding=3, bias=False
         )

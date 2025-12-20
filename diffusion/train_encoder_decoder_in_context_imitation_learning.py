@@ -274,34 +274,39 @@ def main(_) -> None:
             ):
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
 
+            if (
+                cfg.wandb.use
+                and cfg.eval.sample_every > 0
+                and global_step % cfg.eval.sample_every == 0
+            ):
+                try:
+                    eval_batch = next(eval_iterator)
+                except StopIteration:
+                    eval_iterator = iter(eval_dataloader)
+                    eval_batch = next(eval_iterator)
+
+                _log_qualitative_samples(
+                    policy=policy,
+                    context=eval_batch,
+                    cfg=cfg,
+                    step=global_step,
+                    device=device,
+                    split="eval",
+                )
+
+                _log_qualitative_samples(
+                    policy=policy,
+                    context=batch,
+                    cfg=cfg,
+                    step=global_step,
+                    device=device,
+                    split="train",
+                )
+
         avg_loss = running_loss / step
         print(f"Epoch {epoch+1}: avg loss {avg_loss:.6f}")
         if cfg.wandb.use:
             wandb.log({"train/mse": avg_loss, "epoch": epoch + 1}, step=global_step)
-
-        try:
-            eval_batch = next(eval_iterator)
-        except StopIteration:
-            eval_iterator = iter(eval_dataloader)
-            eval_batch = next(eval_iterator)
-
-        _log_qualitative_samples(
-            policy=policy,
-            context=eval_batch,
-            cfg=cfg,
-            step=global_step,
-            device=device,
-            split="eval",
-        )
-
-        _log_qualitative_samples(
-            policy=policy,
-            context=batch,
-            cfg=cfg,
-            step=global_step,
-            device=device,
-            split="train",
-        )
 
         checkpoint_path = save_dir / f"policy_epoch_{epoch+1:03d}.pt"
         torch.save(

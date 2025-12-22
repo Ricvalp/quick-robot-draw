@@ -13,6 +13,8 @@ from ml_collections import ConfigDict, config_flags
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
+from dataset.episode_builder import EpisodeBuilderSimilar
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -166,9 +168,11 @@ def main(_) -> None:
         K=cfg.data.K,
         backend=cfg.data.backend,
         max_seq_len=cfg.data.max_seq_len,
-        augment=False,
         seed=cfg.run.seed,
         coordinate_mode=cfg.data.coordinate_mode,
+        builder_cls=EpisodeBuilderSimilar,  # EpidodeBuilder
+        index_dir=cfg.data.index_dir,
+        ids_dir=cfg.data.ids_dir,
     )
     collator = ContextQueryInContextDiffusionCollator(
         horizon=cfg.model.horizon, seed=cfg.run.seed
@@ -274,11 +278,7 @@ def main(_) -> None:
             ):
                 wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
 
-            if (
-                cfg.wandb.use
-                and cfg.eval.sample_every > 0
-                and global_step % cfg.eval.sample_every == 0
-            ):
+            if cfg.wandb.use and global_step % cfg.eval.eval_every == 0:
                 try:
                     eval_batch = next(eval_iterator)
                 except StopIteration:
@@ -296,7 +296,9 @@ def main(_) -> None:
 
                 _log_qualitative_samples(
                     policy=policy,
-                    context=batch,
+                    context={
+                        key: batch[key][: cfg.eval.samples] for key in batch.keys()
+                    },
                     cfg=cfg,
                     step=global_step,
                     device=device,

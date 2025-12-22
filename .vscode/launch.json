@@ -70,9 +70,8 @@
             },
             "args": [
                 "--config=configs/diffusion/encoder_decoder_in_context_imitation_learning.py",
-                "--config.data.root=data/single-class/eyeglasses-simplified/",
+                "--config.data.root=data/all-classes/train-val-split/",
                 "--config.loader.num_workers=0",
-                "--config.eval.interval=100"
             ]
         },
         {

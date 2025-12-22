@@ -13,11 +13,12 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
+import faiss
 import numpy as np
 
 from .preprocess import ProcessedSketch
 
-__all__ = ["Episode", "EpisodeBuilder"]
+__all__ = ["Episode", "EpisodeBuilder", "EpisodeBuilderSimilar"]
 
 
 @dataclass
@@ -245,3 +246,136 @@ class EpisodeBuilder:
             merged[key] = {**params, **user}
             merged[key]["enabled"] = bool(merged[key].get("enabled", params["enabled"]))
         return merged
+
+
+class EpisodeBuilderSimilar(EpisodeBuilder):
+
+    def __init__(
+        self,
+        *,
+        fetch_family,
+        fetch_sketch,
+        family_ids: Sequence[str],
+        k_shot: int,
+        max_seq_len: Optional[int] = None,
+        max_query_len: Optional[int] = None,
+        max_context_len: Optional[int] = None,
+        seed: Optional[int] = None,
+        dtype=np.float32,
+        coordinate_mode: str = "delta",
+        faiss_indices: Dict[str, faiss.IndexFlatL2] = None,
+        ids: Dict[str, np.ndarray] = None,
+    ) -> None:
+        super().__init__(
+            fetch_family=fetch_family,
+            fetch_sketch=fetch_sketch,
+            family_ids=family_ids,
+            k_shot=k_shot,
+            max_seq_len=max_seq_len,
+            max_query_len=max_query_len,
+            max_context_len=max_context_len,
+            seed=seed,
+            dtype=dtype,
+            coordinate_mode=coordinate_mode,
+        )
+        self.faiss_indices = faiss_indices
+        self.ids = ids
+
+    def build_episode(
+        self,
+        *,
+        family_id: Optional[str] = None,
+        rng: Optional[np.random.RandomState] = None,
+    ) -> Episode:
+        """
+        Compose a single K-shot episode.
+
+        Parameters
+        ----------
+        family_id : Optional[str]
+            Optionally force sampling from a specific family.
+        augment : bool
+            Apply random augmentations to each sketch when True. The augmenter
+            settings are controlled by `augment_config`.
+        """
+        rng = rng or self.random
+        resolved_family = family_id or self._sample_family(rng)
+        sample_ids = list(self.fetch_family(resolved_family))
+        if len(sample_ids) < self.k_shot + 1:
+            raise ValueError(
+                f"Family '{resolved_family}' does not have enough sketches "
+                f"for {self.k_shot}-shot episodes."
+            )
+        rng.shuffle(sample_ids)
+        query_id = sample_ids[0]
+        query_sketch = self.fetch_sketch(resolved_family, query_id)
+
+        # index, ids = self._load_family_index(resolved_family)
+
+        faiss_idx = self.ids[resolved_family].tolist().index(int(query_id))
+        q = self.faiss_indices[resolved_family].reconstruct(faiss_idx).reshape(1, -1)
+        _, idxs = self.faiss_indices[resolved_family].search(q, k=self.k_shot + 1)
+        closest_sketch_ids = self.ids[resolved_family][idxs[0]]
+        prompt_ids = [sid for sid in closest_sketch_ids if int(sid) != int(query_id)]
+        prompt_sketches = [
+            self.fetch_sketch(resolved_family, sid) for sid in prompt_ids
+        ]
+
+        if len(prompt_sketches) != self.k_shot:
+            raise ValueError(
+                "For some reason the query sketch was included in the prompt sketches."
+            )
+
+        # prompt_ids = sample_ids[: self.k_shot]
+        # query_id = sample_ids[self.k_shot]
+
+        # prompt_sketches = [
+        #     self.fetch_sketch(resolved_family, sid) for sid in prompt_ids
+        # ]
+        # query_sketch = self.fetch_sketch(resolved_family, query_id)
+
+        episode_tokens = self._compose_tokens(prompt_sketches, query_sketch)
+        total_len = episode_tokens.shape[0]
+        if self.max_seq_len is not None and total_len > self.max_seq_len:
+            raise ValueError(
+                f"Episode length {total_len} exceeds limit {self.max_seq_len}."
+            )
+        if self.max_query_len is not None and query_sketch.length > self.max_query_len:
+            raise ValueError(
+                f"Query length {query_sketch.length} exceeds limit {self.max_query_len}."
+            )
+        if (
+            self.max_context_len is not None
+            and sum(sk.length for sk in prompt_sketches) + self.k_shot + 2
+            > self.max_context_len
+        ):
+            raise ValueError(
+                f"Context length {sum(sk.length for sk in prompt_sketches)} "
+                f"exceeds limit {self.max_context_len}."
+            )
+        episode_id = uuid.uuid4().hex
+        metadata = {
+            "prompt_ids": prompt_ids,
+            "query_id": query_id,
+            "family_id": resolved_family,
+            "k_shot": self.k_shot,
+            "length": total_len,
+        }
+        return Episode(
+            episode_id=episode_id,
+            family_id=resolved_family,
+            prompt=prompt_sketches,
+            query=query_sketch,
+            tokens=episode_tokens,
+            lengths={
+                "prompt": sum(sk.length for sk in prompt_sketches),
+                "query": query_sketch.length,
+                "total": total_len,
+            },
+            metadata=metadata,
+        )
+
+    def _load_family_index(self, family):
+        index = faiss.read_index(f"{self.index_dir}family_{family}.index")
+        ids = np.load(f"{self.ids_dir}{family}.npy")
+        return index, ids

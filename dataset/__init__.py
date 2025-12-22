@@ -12,7 +12,7 @@ from .diffusion import (
     DiffusionCollator,
     InContextDiffusionCollator,
 )
-from .episode_builder import Episode, EpisodeBuilder
+from .episode_builder import Episode, EpisodeBuilder, EpisodeBuilderSimilar
 from .loader import QuickDrawEpisodes, QuickDrawSketches
 from .lstm import ILRNNCollator, InContextSketchRNNCollator
 from .preprocess import (
@@ -32,6 +32,7 @@ __all__ = [
     "load_ndjson_sketches",
     "load_binary_sketches",
     "EpisodeBuilder",
+    "EpisodeBuilderSimilar",
     "Episode",
     "StorageConfig",
     "DatasetManifest",

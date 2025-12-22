@@ -70,8 +70,13 @@ def main(_):
     cfg = load_config(_CONFIG_FILE)
     rasterizer_config = load_config(_RASTERIZER_CONFIG).rasterizer_config
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    family = "axe"
+    family = "brain"
+    import time
+
+    start_time = time.time()
     index, ids = load_family_index(cfg.out_dir, family)
+    end_time = time.time()
+    print(f"Loaded FAISS index and IDs in {end_time - start_time:.3f} seconds")
 
     sketch_to_image = SketchToImage(rasterizer_config=rasterizer_config)
 
@@ -89,6 +94,7 @@ def main(_):
 
     for sketch_id in sketches_ids[:10]:
         key_sketch = sketch_storage.get(family, sketch_id)
+
         absolute = torch.tensor(key_sketch.absolute)
         pen = torch.tensor(key_sketch.pen)
         tokens = torch.cat([absolute, pen.unsqueeze(-1)], dim=-1)
@@ -100,8 +106,17 @@ def main(_):
             }
         )
         key_img = key_img["img"].to(device)
-        q = embed_query(key_img, embedding_model)
+
+        # q = embed_query(key_img, embedding_model)
+
+        faiss_idx = ids.tolist().index(int(sketch_id))
+        q = index.reconstruct(faiss_idx).reshape(1, -1)
+
+        start_time = time.time()
         _, idxs = index.search(q, k=5)
+        end_time = time.time()
+        print(f"Performed FAISS search in {end_time - start_time:.3f} seconds")
+        exit()
         closest_sketch_ids = ids[idxs[0]]
 
         closest_sketches = [

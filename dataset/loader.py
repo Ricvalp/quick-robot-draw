@@ -8,11 +8,12 @@ import os
 import warnings
 from typing import Dict, List, Optional
 
+import faiss
 import numpy as np
 import torch
 from torch.utils.data import Dataset, IterableDataset, get_worker_info
 
-from dataset.episode_builder import EpisodeBuilder
+from dataset.episode_builder import EpisodeBuilder, EpisodeBuilderSimilar
 from dataset.storage import DatasetManifest, SketchStorage, StorageConfig
 
 __all__ = ["QuickDrawEpisodes"]
@@ -59,6 +60,9 @@ class QuickDrawEpisodes(Dataset):
         storage_config: Optional[StorageConfig] = None,
         seed: int = 0,
         coordinate_mode: str = "delta",
+        builder_cls: EpisodeBuilder = EpisodeBuilder,
+        index_dir: Optional[str] = None,
+        ids_dir: Optional[str] = None,
     ) -> None:
         self.root = root
         self.split = split
@@ -69,6 +73,9 @@ class QuickDrawEpisodes(Dataset):
         self.retry_on_overflow = retry_on_overflow
         self.seed = seed
         self.coordinate_mode = coordinate_mode
+        self.builder_cls = builder_cls
+        self.index_dir = index_dir
+        self.ids_dir = ids_dir
 
         manifest_path = os.path.join(root, "DatasetManifest.json")
         if not os.path.exists(manifest_path):
@@ -119,6 +126,8 @@ class QuickDrawEpisodes(Dataset):
         )
         if self._episode_space == 0:
             self._episode_space = len(self.family_ids)
+
+        self.faiss_indices, self.ids = self._load_faiss_indices(index_dir, ids_dir)
 
     def __getstate__(self):
         """Customize pickling to avoid non-fork-safe resources."""
@@ -210,18 +219,53 @@ class QuickDrawEpisodes(Dataset):
         if self.sketch_storage is not None:
             self.sketch_storage.close()
         self.sketch_storage = SketchStorage(self.storage_config, mode="r")
-        self.builder = EpisodeBuilder(
-            fetch_family=self._fetch_family,
-            fetch_sketch=self.sketch_storage.get,
-            family_ids=self.family_ids,
-            k_shot=self.k_shot,
-            max_seq_len=self.max_seq_len,
-            max_query_len=self.max_query_len,
-            max_context_len=self.max_context_len,
-            seed=self.seed,
-            coordinate_mode=self.coordinate_mode,
-        )
+
+        if self.builder_cls == EpisodeBuilder:
+            self.builder = self.builder_cls(
+                fetch_family=self._fetch_family,
+                fetch_sketch=self.sketch_storage.get,
+                family_ids=self.family_ids,
+                k_shot=self.k_shot,
+                max_seq_len=self.max_seq_len,
+                max_query_len=self.max_query_len,
+                max_context_len=self.max_context_len,
+                seed=self.seed,
+                coordinate_mode=self.coordinate_mode,
+            )
+        elif self.builder_cls == EpisodeBuilderSimilar:
+            self.builder = self.builder_cls(
+                fetch_family=self._fetch_family,
+                fetch_sketch=self.sketch_storage.get,
+                family_ids=self.family_ids,
+                k_shot=self.k_shot,
+                max_seq_len=self.max_seq_len,
+                max_query_len=self.max_query_len,
+                max_context_len=self.max_context_len,
+                seed=self.seed,
+                coordinate_mode=self.coordinate_mode,
+                faiss_indices=self.faiss_indices,
+                ids=self.ids,
+            )
         self._worker_pid = pid
+
+    def _load_faiss_indices(self, index_dir: str, ids_dir: str):
+
+        faiss_indices = {}
+        ids_dict = {}
+        for family_id in self.family_ids:
+            index_path = os.path.join(index_dir, f"family_{family_id}.index")
+            ids_path = os.path.join(ids_dir, f"{family_id}.npy")
+            if os.path.exists(index_path) and os.path.exists(ids_path):
+                index = faiss.read_index(index_path)
+                ids = np.load(ids_path)
+                faiss_indices[family_id] = index
+                ids_dict[family_id] = ids
+            else:
+                raise FileNotFoundError(
+                    f"Faiss index or ids not found for family '{family_id}' "
+                    f"in '{index_dir}' or '{ids_dir}'."
+                )
+        return faiss_indices, ids_dict
 
     def _fetch_family(self, family_id: str) -> List[str]:
         return self.family_to_samples[family_id]

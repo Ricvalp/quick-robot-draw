@@ -17,6 +17,8 @@ def get_config() -> ConfigDict:
     cfg.data.max_context_len = 300
     cfg.data.max_seq_len = 360
     cfg.data.coordinate_mode = "absolute"
+    cfg.data.index_dir = "metrics/index/faiss_index/"
+    cfg.data.ids_dir = "metrics/index/ids_family/"
 
     cfg.loader = ConfigDict()
     cfg.loader.batch_size = 128
@@ -50,9 +52,10 @@ def get_config() -> ConfigDict:
     cfg.checkpoint.save_interval = 10
 
     cfg.eval = ConfigDict()
-    cfg.eval.samples = 64
+    cfg.eval.samples = 8
     cfg.eval.seed = 42
     cfg.eval.num_inference_steps = 300
+    cfg.eval.eval_every = 2000
 
     cfg.profiling = ConfigDict()
     cfg.profiling.use = False

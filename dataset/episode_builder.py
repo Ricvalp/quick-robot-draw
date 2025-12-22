@@ -71,7 +71,6 @@ class EpisodeBuilder:
         max_query_len: Optional[int] = None,
         max_context_len: Optional[int] = None,
         seed: Optional[int] = None,
-        augment_config: Optional[Dict[str, object]] = None,
         dtype=np.float32,
         coordinate_mode: str = "delta",
     ) -> None:
@@ -84,7 +83,6 @@ class EpisodeBuilder:
         self.max_context_len = max_context_len
         self.dtype = dtype
         self.random = np.random.RandomState(seed)
-        self.augment_config = self._resolve_augment_config(augment_config or {})
         self.token_dim = 7  # dx, dy, pen, start, sep, reset, stop
         self.coordinate_mode = coordinate_mode.lower()
         if self.coordinate_mode not in {"delta", "absolute"}:
@@ -103,7 +101,6 @@ class EpisodeBuilder:
         self,
         *,
         family_id: Optional[str] = None,
-        augment: bool = True,
         rng: Optional[np.random.RandomState] = None,
     ) -> Episode:
         """
@@ -130,12 +127,9 @@ class EpisodeBuilder:
         query_id = sample_ids[self.k_shot]
 
         prompt_sketches = [
-            self._maybe_augment(self.fetch_sketch(resolved_family, sid), augment, rng)
-            for sid in prompt_ids
+            self.fetch_sketch(resolved_family, sid) for sid in prompt_ids
         ]
-        query_sketch = self._maybe_augment(
-            self.fetch_sketch(resolved_family, query_id), augment, rng
-        )
+        query_sketch = self.fetch_sketch(resolved_family, query_id)
 
         episode_tokens = self._compose_tokens(prompt_sketches, query_sketch)
         total_len = episode_tokens.shape[0]
@@ -233,64 +227,6 @@ class EpisodeBuilder:
         tokens[:, 2] = sketch.pen
         tokens[:, 3] = 1 - sketch.pen
         return tokens
-
-    def _maybe_augment(
-        self,
-        sketch: ProcessedSketch,
-        enabled: bool,
-        rng: np.random.RandomState,
-    ) -> ProcessedSketch:
-        """
-        Apply random geometric augmentations to a sketch when requested.
-
-        Augmentations include rotation, isotropic scaling, translation, and Gaussian
-        jitter, each controlled by the configuration dictionary. Returns a new
-        `ProcessedSketch` with recomputed deltas and augmented metadata.
-        """
-        if not enabled:
-            return sketch
-        cfg = self.augment_config
-        absolute = sketch.absolute.copy()
-        transforms_meta = {}
-        if cfg["rotation"]["enabled"]:
-            angle = rng.uniform(*cfg["rotation"]["range"])
-            transforms_meta["rotation"] = angle
-            c, s = math.cos(angle), math.sin(angle)
-            rot = np.array([[c, -s], [s, c]], dtype=absolute.dtype)
-            absolute = absolute @ rot.T
-        if cfg["scale"]["enabled"]:
-            scale = rng.uniform(*cfg["scale"]["range"])
-            transforms_meta["scale"] = scale
-            absolute *= scale
-        if cfg["translation"]["enabled"]:
-            tx = rng.uniform(*cfg["translation"]["range"])
-            ty = rng.uniform(*cfg["translation"]["range"])
-            transforms_meta["translation"] = (tx, ty)
-            absolute += np.array([tx, ty], dtype=absolute.dtype)
-        if cfg["jitter"]["enabled"]:
-            std = cfg["jitter"]["std"]
-            absolute += rng.normal(scale=std, size=absolute.shape).astype(
-                absolute.dtype, copy=False
-            )
-            transforms_meta["jitter"] = std
-
-        deltas = np.zeros_like(absolute)
-        deltas[0] = absolute[0]
-        if absolute.shape[0] > 1:
-            deltas[1:] = absolute[1:] - absolute[:-1]
-
-        metadata = dict(sketch.metadata)
-        metadata["augmentations"] = transforms_meta
-
-        return ProcessedSketch(
-            family_id=sketch.family_id,
-            sample_id=sketch.sample_id,
-            absolute=absolute,
-            deltas=deltas.astype(self.dtype, copy=False),
-            pen=sketch.pen.copy(),
-            length=sketch.length,
-            metadata=metadata,
-        )
 
     @staticmethod
     def _resolve_augment_config(

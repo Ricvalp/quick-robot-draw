@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset, get_worker_info
+from torch.utils.data import Dataset, IterableDataset, get_worker_info
 
 from dataset.episode_builder import EpisodeBuilder
 from dataset.storage import DatasetManifest, SketchStorage, StorageConfig
@@ -36,8 +36,6 @@ class QuickDrawEpisodes(Dataset):
             a warning) or fail after several attempts.
     backend : str
         Storage backend to use. Should match preprocessing stage.
-    augment : bool
-        Whether to apply online augmentations during sampling.
     coordinate_mode : str
         `"delta"` (default) for motion deltas or `"absolute"` for absolute positions.
     storage_config : Optional[StorageConfig]
@@ -45,8 +43,6 @@ class QuickDrawEpisodes(Dataset):
         derived from arguments.
     seed : Optional[int]
         Base seed for deterministic episode sampling across workers.
-    augment_config : Optional[dict]
-        Augmentation overrides passed to `EpisodeBuilder`.
     """
 
     def __init__(
@@ -60,10 +56,8 @@ class QuickDrawEpisodes(Dataset):
         max_context_len: Optional[int] = None,
         retry_on_overflow: bool = True,
         backend: str = "lmdb",
-        augment: bool = True,
         storage_config: Optional[StorageConfig] = None,
         seed: int = 0,
-        augment_config: Optional[Dict[str, object]] = None,
         coordinate_mode: str = "delta",
     ) -> None:
         self.root = root
@@ -73,9 +67,7 @@ class QuickDrawEpisodes(Dataset):
         self.max_query_len = max_query_len
         self.max_context_len = max_context_len
         self.retry_on_overflow = retry_on_overflow
-        self.augment = augment
         self.seed = seed
-        self.augment_config = augment_config
         self.coordinate_mode = coordinate_mode
 
         manifest_path = os.path.join(root, "DatasetManifest.json")
@@ -163,11 +155,11 @@ class QuickDrawEpisodes(Dataset):
             rng_seed = (base_seed + attempt * 9773) % (2**32)
             rng = np.random.RandomState(rng_seed)
             try:
-                episode = self.builder.build_episode(augment=self.augment, rng=rng)
+                episode = self.builder.build_episode(rng=rng)
                 break
             except ValueError:
-
                 continue
+
         if episode is None:
             raise RuntimeError(
                 f"Unable to sample an episode ≤ {self.max_seq_len} tokens after "
@@ -227,10 +219,73 @@ class QuickDrawEpisodes(Dataset):
             max_query_len=self.max_query_len,
             max_context_len=self.max_context_len,
             seed=self.seed,
-            augment_config=self.augment_config,
             coordinate_mode=self.coordinate_mode,
         )
         self._worker_pid = pid
 
     def _fetch_family(self, family_id: str) -> List[str]:
         return self.family_to_samples[family_id]
+
+
+class QuickDrawSketches(IterableDataset):
+    """
+    PyTorch dataset of single sketches.
+
+    Parameters
+    ----------
+    family_saples : Dict[str, List[str]]
+    """
+
+    def __init__(
+        self,
+        family: str,
+        family_samples: Dict[str, List[str]],
+        storage_config: StorageConfig,
+    ) -> None:
+
+        self.family = family
+        self.family_samples = family_samples
+        self.storage_config = storage_config
+        self.sketch_storage = None
+
+    def __getstate__(self):
+        """Customize pickling to avoid non-fork-safe resources."""
+        state = self.__dict__.copy()
+        state["sketch_storage"] = None
+        state["_worker_pid"] = None
+        return state
+
+    def __iter__(self):
+
+        self._ensure_worker_state()
+
+        worker_info = get_worker_info()
+        if worker_info is None:
+            start = 0
+            step = 1
+        else:
+            worker_id = worker_info.id
+            num_workers = worker_info.num_workers
+            start = worker_id
+            step = num_workers
+
+        for sample_id in self.family_samples[start::step]:
+            sketch = self.get_sketch(family_id=self.family, sample_id=sample_id)
+
+            absolute = torch.tensor(sketch.absolute)
+            pen = torch.tensor(sketch.pen)
+            tokens = torch.cat([absolute, pen.unsqueeze(-1)], dim=-1)
+            sketch_id = sketch.sample_id
+            yield {"tokens": tokens, "family_id": self.family, "sketch_id": sketch_id}
+
+    def _ensure_worker_state(self) -> None:
+        """Ensure per-worker state is initialized for multi-process loading.
+
+        Necessary because SketchStorage and EpisodeBuilder are not fork-safe.
+        """
+        pid = os.getpid()
+        if self.sketch_storage is not None:
+            self.sketch_storage.close()
+        self.sketch_storage = SketchStorage(self.storage_config, mode="r")
+        self.get_sketch = self.sketch_storage.get
+        self._worker_pid = pid

@@ -13,3 +13,4 @@ profiling/
 .ruff_cache/
 
 episode_lengths*
+metrics/index/

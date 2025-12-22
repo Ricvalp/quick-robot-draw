@@ -13,13 +13,13 @@ __all__ = [
 
 
 class ResNet18FeatureExtractor(nn.Module):
-    def __init__(self, prertained_checkpoint_path: Union[str, Path]) -> None:
+    def __init__(self, pretrained_checkpoint_path: Union[str, Path]) -> None:
         super().__init__()
         self.model = resnet18(pretrained=False, num_classes=345)
         self.model.conv1 = nn.Conv2d(
             1, 64, kernel_size=7, stride=2, padding=3, bias=False
         )
-        state_dict = torch.load(prertained_checkpoint_path)
+        state_dict = torch.load(pretrained_checkpoint_path)
         self.model.load_state_dict(state_dict)
         self.model.fc = nn.Identity()  # Remove the final classification layer
 
@@ -30,7 +30,6 @@ class ResNet18FeatureExtractor(nn.Module):
 def compute_fid(
     generated_features: torch.Tensor,
     statistics_path: str = None,
-    statistics: dict = None,
 ) -> float:
     """
     generated_images: Tensor of shape (N, 1, H, W)
@@ -41,7 +40,7 @@ def compute_fid(
     mu_gen = np.mean(generated_features, axis=0)
     sigma_gen = np.cov(generated_features, rowvar=False)
 
-    stats = np.load(statistics_path) if statistics_path is not None else statistics
+    stats = np.load(statistics_path)
     if stats is None:
         raise ValueError("Either statistics_path or statistics must be provided.")
     mu_real = stats["mu"]

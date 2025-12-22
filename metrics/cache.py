@@ -10,7 +10,9 @@ from dataset import RasterizerConfig, rasterize_absolute_points
 
 __all__ = [
     "EpisodeToImage",
+    "SketchToImage",
     "EpisodeToImageCollate",
+    "SketchToImageCollate",
     "get_cached_loader",
 ]
 
@@ -38,6 +40,25 @@ class EpisodeToImage:
             "sketch_id": sketch["query_id"],
         }
 
+
+class SketchToImage:
+
+    def __init__(self, rasterizer_config) -> None:
+        self.rasterizer_config = rasterizer_config
+
+    def __call__(self, sketch: Dict[str, torch.Tensor]):
+
+        tokens = sketch["tokens"]
+        img = rasterize_absolute_points(
+            sketch=tokens.numpy(), config=self.rasterizer_config
+        )
+
+        return {
+            "img": torch.from_numpy(img).unsqueeze(0),
+            "family": sketch["family_id"],
+            "sketch_id": sketch["sketch_id"],
+        }
+
     @staticmethod
     def _filter_tokens(tokens: torch.Tensor) -> torch.Tensor:
         """Drop special tokens, keeping only actual sketch."""
@@ -53,7 +74,6 @@ class EpisodeToImageCollate:
 
     def __init__(self, rasterizer_config: RasterizerConfig) -> None:
         self.rasterizer_config = rasterizer_config
-
         self.episode_to_image = EpisodeToImage(rasterizer_config=rasterizer_config)
 
     def __call__(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -72,6 +92,31 @@ class EpisodeToImageCollate:
             "img": torch.cat(imgs, dim=0),
             "family": torch.cat(families, dim=0),
             "sketch_id": torch.cat(sketch_ids, dim=0),
+        }
+
+
+class SketchToImageCollate:
+
+    def __init__(self, rasterizer_config: RasterizerConfig) -> None:
+        self.rasterizer_config = rasterizer_config
+        self.sketch_to_image = SketchToImage(rasterizer_config=rasterizer_config)
+
+    def __call__(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+
+        imgs = []
+        families = []
+        sketch_ids = []
+
+        for sketch in batch:
+            processed = self.sketch_to_image(sketch)
+            imgs.append(processed["img"])
+            families.append(sketch["family_id"])
+            sketch_ids.append(sketch["sketch_id"])
+
+        return {
+            "imgs": torch.cat(imgs, dim=0),
+            "families": families,
+            "sketch_ids": sketch_ids,
         }
 
 

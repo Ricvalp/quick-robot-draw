@@ -7,9 +7,13 @@ serve it through PyTorch `Dataset` interfaces.
 """
 
 from . import visualize
-from .diffusion import DiffusionCollator
+from .diffusion import (
+    ContextQueryInContextDiffusionCollator,
+    DiffusionCollator,
+    InContextDiffusionCollator,
+)
 from .episode_builder import Episode, EpisodeBuilder
-from .loader import QuickDrawEpisodes
+from .loader import QuickDrawEpisodes, QuickDrawSketches
 from .lstm import ILRNNCollator, InContextSketchRNNCollator
 from .preprocess import (
     ProcessedSketch,
@@ -34,6 +38,7 @@ __all__ = [
     "SketchStorage",
     "EpisodeStorage",
     "QuickDrawEpisodes",
+    "QuickDrawSketches",
     "DiffusionCollator",
     "InContextDiffusionCollator",
     "visualize",
@@ -42,4 +47,5 @@ __all__ = [
     "rasterize_processed_sketch",
     "ILRNNCollator",
     "InContextSketchRNNCollator",
+    "ContextQueryInContextDiffusionCollator",
 ]

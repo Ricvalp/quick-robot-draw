@@ -187,11 +187,23 @@ def main(_) -> None:
         collate_fn=collator,
     )
 
+    eval_dataset = QuickDrawEpisodes(
+        root=cfg.data.root,
+        split="val" if not cfg.eval.eval_on_train else cfg.data.split,
+        K=cfg.data.K,
+        backend=cfg.data.backend,
+        max_seq_len=cfg.data.max_seq_len,
+        seed=cfg.run.seed,
+        coordinate_mode=cfg.data.coordinate_mode,
+        builder_cls=EpisodeBuilderSimilar,  # EpidodeBuilder
+        index_dir=cfg.data.index_dir,
+        ids_dir=cfg.data.ids_dir,
+    )
     eval_collator = ContextQueryInContextDiffusionCollator(
         horizon=cfg.model.horizon, seed=cfg.run.seed
     )
     eval_dataloader = DataLoader(
-        dataset,
+        eval_dataset,
         batch_size=cfg.eval.samples,
         shuffle=True,
         collate_fn=eval_collator,

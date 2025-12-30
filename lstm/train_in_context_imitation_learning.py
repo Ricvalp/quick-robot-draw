@@ -18,6 +18,7 @@ from tqdm.auto import tqdm
 matplotlib.use("Agg")
 
 import wandb
+from dataset.episode_builder import EpisodeBuilderSimilar
 from dataset.loader import QuickDrawEpisodes
 from dataset.lstm import InContextSketchRNNCollator
 from lstm import SketchRNN, SketchRNNConfig
@@ -181,9 +182,11 @@ def main(_) -> None:
         max_seq_len=cfg.data.max_seq_len,
         max_query_len=cfg.data.max_query_len,
         max_context_len=cfg.data.max_context_len,
-        augment=False,
         seed=cfg.run.seed,
         coordinate_mode=cfg.data.coordinate_mode,
+        builder_cls=EpisodeBuilderSimilar,  # EpidodeBuilder
+        index_dir=cfg.data.index_dir,
+        ids_dir=cfg.data.ids_dir,
     )
 
     collator = InContextSketchRNNCollator(
@@ -200,8 +203,8 @@ def main(_) -> None:
         pin_memory=True,
         drop_last=True,
         collate_fn=collator,
-        prefetch_factor=4,
-        persistent_workers=True,
+        # prefetch_factor=4,
+        # persistent_workers=True,
     )
 
     eval_dataset = QuickDrawEpisodes(
@@ -210,9 +213,11 @@ def main(_) -> None:
         K=cfg.data.K,
         backend=cfg.data.backend,
         max_seq_len=cfg.data.max_seq_len,
-        augment=False,
         seed=cfg.run.seed + 1,
         coordinate_mode=cfg.data.coordinate_mode,
+        builder_cls=EpisodeBuilderSimilar,  # EpidodeBuilder
+        index_dir=cfg.data.index_dir,
+        ids_dir=cfg.data.ids_dir,
     )
     eval_collator = InContextSketchRNNCollator(
         max_query_len=cfg.data.max_query_len,
@@ -376,7 +381,7 @@ def main(_) -> None:
                 checkpoint_path,
             )
 
-        if epoch + 1 % cfg.eval.interval == 0:
+        if epoch % cfg.eval.interval == 0:
 
             try:
                 eval_batch = next(eval_iterator)

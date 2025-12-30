@@ -17,6 +17,8 @@ def get_config() -> ConfigDict:
     cfg.data.max_query_len = 60
     cfg.data.max_context_len = 400
     cfg.data.coordinate_mode = "delta"
+    cfg.data.index_dir = "metrics/index/faiss_index/"
+    cfg.data.ids_dir = "metrics/index/ids_family/"
 
     cfg.loader = ConfigDict()
     cfg.loader.batch_size = 64
@@ -53,9 +55,9 @@ def get_config() -> ConfigDict:
     cfg.checkpoint.save_interval = 10
 
     cfg.eval = ConfigDict()
-    cfg.eval.samples = 4
+    cfg.eval.samples = 16
     cfg.eval.steps = 1000
-    cfg.eval.interval = 5
+    cfg.eval.interval = 1
     cfg.eval.temperature = 0.65
     cfg.eval.seed = 42
     cfg.eval.greedy = False

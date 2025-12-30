@@ -56,6 +56,7 @@ def get_config() -> ConfigDict:
     cfg.eval.seed = 42
     cfg.eval.num_inference_steps = 300
     cfg.eval.eval_every = 2000
+    cfg.eval.eval_on_train = False
 
     cfg.profiling = ConfigDict()
     cfg.profiling.use = False

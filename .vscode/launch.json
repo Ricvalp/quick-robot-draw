@@ -42,23 +42,6 @@
             ]
         },
         {
-            "name": "Train Imitation Learning LSTM",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "lstm/train_imitation_learning.py",
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "env": {
-                "PYTHONPATH": "."
-            },
-            "args": [
-                "--config=configs/lstm/imitation_learning.py",
-                "--config.data.root=data/single-class/eyeglasses-simplified/",
-                "--config.loader.num_workers=0",
-                "--config.wandb.use=False",
-            ]
-        },
-        {
             "name": "Train Encoder Decoder In-Context Imitation Learning Diffusion",
             "type": "debugpy",
             "request": "launch",
@@ -75,22 +58,19 @@
             ]
         },
         {
-            "name": "Train Imitation Learning Diffusion",
+            "name": "Train Decoder Only In-Context Imitation Learning Diffusion",
             "type": "debugpy",
             "request": "launch",
-            "program": "diffusion/train_imitation_learning.py",
+            "program": "diffusion/train_decoder_only_in_context_imitation_learning.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
                 "PYTHONPATH": "."
             },
             "args": [
-                "--config=configs/diffusion/imitation_learning.py",
-                "--config.data.root=data/all-classes/train-only/",
-                "--config.model.horizon=8",
+                "--config=configs/diffusion/decoder_only_in_context_imitation_learning.py",
+                "--config.data.root=data/all-classes/train-val-split/",
                 "--config.loader.num_workers=0",
-                "--config.checkpoint.dir=diffusion_policy/checkpoints/imitation_learning/",
-                "--config.wandb.use=False",
             ]
         },
         {

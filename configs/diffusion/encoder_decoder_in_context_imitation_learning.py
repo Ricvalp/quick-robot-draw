@@ -48,19 +48,18 @@ def get_config() -> ConfigDict:
     cfg.model.horizon = 8
 
     cfg.checkpoint = ConfigDict()
-    cfg.checkpoint.dir = "diffusion/checkpoints"
+    cfg.checkpoint.dir = "diffusion/checkpoints/encoder_decoder"
     cfg.checkpoint.save_interval = 10
 
     cfg.eval = ConfigDict()
     cfg.eval.samples = 8
     cfg.eval.seed = 42
     cfg.eval.num_inference_steps = 300
-    cfg.eval.eval_every = 2000
     cfg.eval.eval_on_train = False
 
     cfg.profiling = ConfigDict()
     cfg.profiling.use = False
-    cfg.profiling.trace_dir = "profiling/diffusion/"
+    cfg.profiling.trace_dir = "profiling/diffusion/encoder_decoder/"
 
     cfg.wandb = ConfigDict()
     cfg.wandb.use = True

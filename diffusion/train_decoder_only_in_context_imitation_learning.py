@@ -7,22 +7,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import matplotlib
 import torch
 from ml_collections import ConfigDict, config_flags
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from dataset.episode_builder import EpisodeBuilderSimilar
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
 import wandb
-from dataset.diffusion import ContextQueryInContextDiffusionCollator
+from dataset.diffusion import InContextDiffusionCollator
+from dataset.episode_builder import EpisodeBuilderSimilar
 from dataset.loader import QuickDrawEpisodes
-from diffusion import DiTEncDecDiffusionPolicy, DiTEncDecDiffusionPolicyConfig
-from diffusion.sampling import sample_quickdraw_tokens_encoder_decoder
+from diffusion import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
+from diffusion.sampling import sample_quickdraw_tokens_decoder_only
 
 
 def load_config(_CONFIG_FILE: str) -> ConfigDict:
@@ -39,14 +34,14 @@ def set_seed(seed: int) -> None:
 
 
 def _log_qualitative_samples(
-    policy: DiTEncDecDiffusionPolicy,
-    context: dict,
+    policy: DiTDiffusionPolicy,
+    context: torch.Tensor,
     split: str,
     cfg: dict,
     step: int,
     device: torch.device,
 ) -> None:
-    """Sample sketches and push them to WandB for visual inspection."""
+    """Sample sketches and push them to WandB for quick visual inspection."""
 
     if (not cfg.wandb.use) or cfg.wandb.project is None or cfg.eval.samples <= 0:
         return
@@ -57,12 +52,14 @@ def _log_qualitative_samples(
     generator = torch.Generator(device=device)
     generator.manual_seed(cfg.eval.seed + step)
 
-    samples = sample_quickdraw_tokens_encoder_decoder(
+    samples = sample_quickdraw_tokens_decoder_only(
         policy=policy,
         max_tokens=cfg.data.max_query_len,
         demos=context,
         generator=generator,
     )
+
+    import matplotlib.pyplot as plt
 
     def _plot_tokens(
         ax, tokens: torch.Tensor, title: str, coordinate_mode: str
@@ -94,7 +91,9 @@ def _log_qualitative_samples(
         sketches = []
         current = []
         for token in ctx_tokens:
-            if token[5] > 0.5:  # stop token marks the end of the episode
+            if token[6] > 0.5:  # stop token marks the end of the episode
+                break
+            if token[5] > 0.5:  # reset separates prompt and query sketches
                 break
             if token[4] > 0.5:  # separator between sketches
                 if current:
@@ -106,12 +105,16 @@ def _log_qualitative_samples(
             sketches.append(torch.stack(current))
         return sketches[: cfg.data.K]
 
+    def _valid_context_tokens(ctx_tokens: torch.Tensor) -> torch.Tensor:
+        """Drop left padding from the context sequence."""
+        mask = ctx_tokens.abs().sum(dim=-1) > 0
+        return ctx_tokens[mask]
+
     images = []
     batch_size = len(samples)
     for idx in range(batch_size):
         ctx_tokens = context["context"][idx]
-        ctx_mask = context["context_mask"][idx]
-        valid_ctx = ctx_tokens[ctx_mask].detach().cpu()
+        valid_ctx = _valid_context_tokens(ctx_tokens)
         prompts = _split_context_prompts(valid_ctx)
         sample_tokens = samples[idx]
 
@@ -152,8 +155,7 @@ def _log_qualitative_samples(
 
 
 _CONFIG_FILE = config_flags.DEFINE_config_file(
-    "config",
-    default="diffusion_policy/configs/encoder_decoder_in_context_imitation_learning.py",
+    "config", default="diffusion_policy/configs/in_context_imitation_learning.py"
 )
 
 
@@ -174,8 +176,8 @@ def main(_) -> None:
         index_dir=cfg.data.index_dir,
         ids_dir=cfg.data.ids_dir,
     )
-    collator = ContextQueryInContextDiffusionCollator(
-        horizon=cfg.model.horizon, seed=cfg.run.seed
+    collator = InContextDiffusionCollator(
+        horizon=cfg.model.horizon, seed=cfg.run.seed, eval=False
     )
     dataloader = DataLoader(
         dataset,
@@ -199,8 +201,8 @@ def main(_) -> None:
         index_dir=cfg.data.index_dir,
         ids_dir=cfg.data.ids_dir,
     )
-    eval_collator = ContextQueryInContextDiffusionCollator(
-        horizon=cfg.model.horizon, seed=cfg.run.seed
+    eval_collator = InContextDiffusionCollator(
+        horizon=cfg.model.horizon, seed=cfg.eval.seed, eval=True
     )
     eval_dataloader = DataLoader(
         eval_dataset,
@@ -216,7 +218,7 @@ def main(_) -> None:
         "beta_schedule": cfg.model.beta_schedule,
     }
 
-    policy_cfg = DiTEncDecDiffusionPolicyConfig(
+    policy_cfg = DiTDiffusionPolicyConfig(
         horizon=cfg.model.horizon,
         point_feature_dim=cfg.model.input_dim,  # 2 positions + 1 pen state + 4 special tokens
         action_dim=cfg.model.output_dim,  # x, y, pen
@@ -229,11 +231,9 @@ def main(_) -> None:
         num_inference_steps=cfg.eval.num_inference_steps,
         noise_scheduler_kwargs=noise_scheduler_kwargs,
     )
-    policy = DiTEncDecDiffusionPolicy(policy_cfg).to(device)
+    policy = DiTDiffusionPolicy(policy_cfg).to(device)
     optimizer = torch.optim.AdamW(
-        policy.parameters(),
-        lr=cfg.training.lr,
-        weight_decay=cfg.training.weight_decay,
+        policy.parameters(), lr=cfg.training.lr, weight_decay=cfg.training.weight_decay
     )
 
     base_save_dir = Path(cfg.checkpoint.dir)
@@ -301,19 +301,10 @@ def main(_) -> None:
         _log_qualitative_samples(
             policy=policy,
             context=eval_batch,
-            cfg=cfg,
-            step=global_step,
-            device=device,
             split="eval",
-        )
-
-        _log_qualitative_samples(
-            policy=policy,
-            context={key: batch[key][: cfg.eval.samples] for key in batch.keys()},
             cfg=cfg,
             step=global_step,
             device=device,
-            split="train",
         )
 
         if (

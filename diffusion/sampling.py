@@ -11,7 +11,8 @@ import torch
 
 __all__ = [
     "InContextDiffusionCollatorEval",
-    "sample_quickdraw_tokens",
+    "sample_quickdraw_tokens_encoder_decoder",
+    "sample_quickdraw_tokens_decoder_only",
     "sample_quickdraw_tokens_unconditional",
     "tokens_to_figure",
     "tokens_to_gif",
@@ -87,7 +88,7 @@ def sample_quickdraw_tokens_unconditional(
 
 
 @torch.no_grad()
-def sample_quickdraw_tokens(
+def sample_quickdraw_tokens_encoder_decoder(
     policy: torch.nn.Module,
     max_tokens: int,
     demos: torch.Tensor,
@@ -135,6 +136,58 @@ def sample_quickdraw_tokens(
         history_mask = torch.cat(
             [history_mask, torch.ones(actions.shape[:2]).to(device).bool()], dim=1
         )
+
+    generated = torch.cat(samples, dim=1)
+    sketches = clean_sketches(generated)
+    return sketches
+
+
+@torch.no_grad()
+def sample_quickdraw_tokens_decoder_only(
+    policy: torch.nn.Module,
+    max_tokens: int,
+    demos: torch.Tensor,
+    *,
+    generator: Optional[torch.Generator] = None,
+) -> torch.Tensor:
+    """Autoregressively sample `total_tokens` conditioned on the growing context."""
+
+    device = next(policy.parameters()).device
+    feature_dim = policy.cfg.point_feature_dim
+
+    if demos["context"].shape[-1] != feature_dim:
+        raise ValueError(
+            f"start_token feature dim {demos['context'].shape[-1]} != {feature_dim}."
+        )
+
+    demos = {key: v.to(device) for key, v in demos.items()}
+
+    horizon = policy.cfg.horizon
+    max_chunks = math.ceil(max_tokens / horizon)
+    samples: list[torch.Tensor] = []
+
+    context = demos["context"]
+    mask = demos["mask"]
+
+    # history = torch.tensor([[0.0, 0.0, 0.0, 0.0, 1.0, 0.0]], device=device).tile(
+    #     (context.shape[0], 1, 1)
+    # )
+
+    # history_mask = torch.ones(history.shape[:2]).to(device=device).bool()
+    # history_mask = torch.cat(
+    #     [history_mask, torch.ones(history.shape[0], horizon).to(device).bool()], dim=1
+    # )
+
+    for _ in range(max_chunks):
+        actions = policy.sample_actions(
+            context=context,
+            mask=mask,
+            generator=generator,
+        )
+        samples.append(actions)
+
+        context = torch.cat([context, actions], dim=1)
+        mask = torch.cat([mask, torch.ones(actions.shape[:2]).to(device).bool()], dim=1)
 
     generated = torch.cat(samples, dim=1)
     sketches = clean_sketches(generated)

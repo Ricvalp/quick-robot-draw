@@ -12,9 +12,13 @@ def get_config() -> ConfigDict:
     cfg.data.root = config_dict.placeholder(str)
     cfg.data.split = "train"
     cfg.data.backend = "lmdb"
-    cfg.data.K = 0
+    cfg.data.K = 4
     cfg.data.max_query_len = 60
+    cfg.data.max_context_len = 300
+    cfg.data.max_seq_len = 360
     cfg.data.coordinate_mode = "absolute"
+    cfg.data.index_dir = "metrics/index/faiss_index/"
+    cfg.data.ids_dir = "metrics/index/ids_family/"
 
     cfg.loader = ConfigDict()
     cfg.loader.batch_size = 64
@@ -44,7 +48,7 @@ def get_config() -> ConfigDict:
     cfg.model.horizon = 8
 
     cfg.checkpoint = ConfigDict()
-    cfg.checkpoint.dir = "diffusion/checkpoints"
+    cfg.checkpoint.dir = "diffusion/checkpoints/decoder_only"
     cfg.checkpoint.save_interval = 10
 
     cfg.eval = ConfigDict()
@@ -59,7 +63,7 @@ def get_config() -> ConfigDict:
 
     cfg.profiling = ConfigDict()
     cfg.profiling.use = False
-    cfg.profiling.trace_dir = "profiling/diffusion/"
+    cfg.profiling.trace_dir = "profiling/diffusion/decoder_only/"
 
     cfg.wandb = ConfigDict()
     cfg.wandb.use = True

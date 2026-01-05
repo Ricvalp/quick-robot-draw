@@ -42,7 +42,6 @@ class SinusoidalTimeEmbedding(nn.Module):
 
 @dataclass
 class DiTDiffusionPolicyConfig:
-    context_length: int
     horizon: int
     point_feature_dim: int
     action_dim: int
@@ -144,7 +143,7 @@ class DiTDiffusionPolicy(nn.Module):
         self, batch: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
 
-        points = batch["points"]
+        points = batch["context"]
         actions = batch["actions"]
         mask = batch["mask"]
 
@@ -180,8 +179,8 @@ class DiTDiffusionPolicy(nn.Module):
 
     def sample_actions(
         self,
-        points: Optional[torch.Tensor] = None,
-        observation: Optional[Dict[str, torch.Tensor]] = None,
+        context: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None,
         generator: Optional[torch.Generator] = None,
     ) -> torch.Tensor:
         """Run the reverse diffusion process to synthesize a horizon chunk.
@@ -202,20 +201,8 @@ class DiTDiffusionPolicy(nn.Module):
             denoised action tokens for the next horizon window.
         """
 
-        if observation is None:
-            observation = {}
-
-        context = observation.get("points")
-        if context is None:
-            context = observation.get("context")
-
-        if context is None:
-            context = points
-        if context is None:
-            raise ValueError("sample_actions requires context points to condition on.")
-
-        batch_size, context_len, _ = context.shape
         device = context.device
+        batch_size = context.shape[0]
 
         sample = torch.randn(
             (batch_size, self.cfg.horizon, self.cfg.action_dim),
@@ -224,53 +211,6 @@ class DiTDiffusionPolicy(nn.Module):
         )
 
         context_tokens = self._encode_context(context)
-
-        mask = observation.get("mask")
-        if mask is None:
-            mask = observation.get("context_mask")
-            if mask is not None and mask.shape[1] != context_len:
-                raise ValueError("context_mask must match the context length.")
-            if mask is not None:
-                mask = mask.to(device=device, dtype=torch.bool)
-                mask = torch.cat(
-                    [
-                        mask,
-                        torch.ones(
-                            batch_size,
-                            self.cfg.horizon,
-                            device=device,
-                            dtype=torch.bool,
-                        ),
-                    ],
-                    dim=1,
-                )
-        else:
-            mask = mask.to(device=device, dtype=torch.bool)
-            if mask.shape[1] == context_len:
-                mask = torch.cat(
-                    [
-                        mask,
-                        torch.ones(
-                            batch_size,
-                            self.cfg.horizon,
-                            device=device,
-                            dtype=torch.bool,
-                        ),
-                    ],
-                    dim=1,
-                )
-            elif mask.shape[1] != context_len + self.cfg.horizon:
-                raise ValueError(
-                    "mask must have length equal to context length or context length + horizon."
-                )
-
-        if mask is None:
-            mask = torch.ones(
-                batch_size,
-                context_len + self.cfg.horizon,
-                device=device,
-                dtype=torch.bool,
-            )
 
         self.scheduler.set_timesteps(self.num_inference_steps, device=device)
 
@@ -300,6 +240,129 @@ class DiTDiffusionPolicy(nn.Module):
             sample = scheduler_step.prev_sample
 
         return sample
+
+    # def sample_actions(
+    #     self,
+    #     points: Optional[torch.Tensor] = None,
+    #     observation: Optional[Dict[str, torch.Tensor]] = None,
+    #     generator: Optional[torch.Generator] = None,
+    # ) -> torch.Tensor:
+    #     """Run the reverse diffusion process to synthesize a horizon chunk.
+
+    #     Args:
+    #         points: Optional context tensor shaped ``(B, T_ctx, point_feature_dim)``.
+    #             When omitted, the method looks for ``"points"`` or ``"context"``
+    #             inside ``observation``. The context provides the already-observed
+    #             tokens that condition the diffusion rollout.
+    #         observation: Optional dictionary that can include pre-padded context
+    #             tensors (``"points"`` or ``"context"``) and an attention mask
+    #             (``"mask"`` or ``"context_mask"``). Masks are expected to be
+    #             boolean tensors where ``True`` marks valid tokens.
+    #         generator: Optional ``torch.Generator`` for deterministic sampling.
+
+    #     Returns:
+    #         Tensor with shape ``(B, horizon, action_dim)`` containing the
+    #         denoised action tokens for the next horizon window.
+    #     """
+
+    #     if observation is None:
+    #         observation = {}
+
+    #     context = observation.get("points")
+    #     if context is None:
+    #         context = observation.get("context")
+
+    #     if context is None:
+    #         context = points
+    #     if context is None:
+    #         raise ValueError("sample_actions requires context points to condition on.")
+
+    #     batch_size, context_len, _ = context.shape
+    #     device = context.device
+
+    #     sample = torch.randn(
+    #         (batch_size, self.cfg.horizon, self.cfg.action_dim),
+    #         generator=generator,
+    #         device=device,
+    #     )
+
+    #     context_tokens = self._encode_context(context)
+
+    #     mask = observation.get("mask")
+    #     if mask is None:
+    #         mask = observation.get("context_mask")
+    #         if mask is not None and mask.shape[1] != context_len:
+    #             raise ValueError("context_mask must match the context length.")
+    #         if mask is not None:
+    #             mask = mask.to(device=device, dtype=torch.bool)
+    #             mask = torch.cat(
+    #                 [
+    #                     mask,
+    #                     torch.ones(
+    #                         batch_size,
+    #                         self.cfg.horizon,
+    #                         device=device,
+    #                         dtype=torch.bool,
+    #                     ),
+    #                 ],
+    #                 dim=1,
+    #             )
+    #     else:
+    #         mask = mask.to(device=device, dtype=torch.bool)
+    #         if mask.shape[1] == context_len:
+    #             mask = torch.cat(
+    #                 [
+    #                     mask,
+    #                     torch.ones(
+    #                         batch_size,
+    #                         self.cfg.horizon,
+    #                         device=device,
+    #                         dtype=torch.bool,
+    #                     ),
+    #                 ],
+    #                 dim=1,
+    #             )
+    #         elif mask.shape[1] != context_len + self.cfg.horizon:
+    #             raise ValueError(
+    #                 "mask must have length equal to context length or context length + horizon."
+    #             )
+
+    #     if mask is None:
+    #         mask = torch.ones(
+    #             batch_size,
+    #             context_len + self.cfg.horizon,
+    #             device=device,
+    #             dtype=torch.bool,
+    #         )
+
+    #     self.scheduler.set_timesteps(self.num_inference_steps, device=device)
+
+    #     for timestep in self.scheduler.timesteps:
+    #         timesteps = torch.full(
+    #             (batch_size,),
+    #             timestep,
+    #             device=device,
+    #             dtype=torch.long,
+    #         )
+
+    #         action_tokens = self._encode_actions(sample)
+    #         tokens = torch.cat([context_tokens, action_tokens], dim=1)
+    #         diffusion_cond = self._diffusion_condition(timesteps)
+    #         encoded = self.transformer(
+    #             tokens,
+    #             key_padding_mask=~mask,
+    #             diffusion_time_cond=diffusion_cond,
+    #         )
+    #         noise_pred = self.output_head(encoded[:, -self.cfg.horizon :, :])
+    #         scheduler_step = self.scheduler.step(
+    #             noise_pred,
+    #             timestep,
+    #             sample,
+    #             generator=generator,
+    #         )
+    #         sample = scheduler_step.prev_sample
+
+    #     return sample
 
 
 __all__ = ["DiTDiffusionPolicy", "DiTDiffusionPolicyConfig"]

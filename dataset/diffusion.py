@@ -107,11 +107,12 @@ class InContextDiffusionCollator:
     In-context diffusion collator.
     """
 
-    def __init__(self, horizon: int, seed: int = 0) -> None:
+    def __init__(self, horizon: int, seed: int = 0, eval=False) -> None:
         if horizon <= 0:
             raise ValueError("horizon must be positive.")
         self.horizon = horizon
         self.rng = np.random.default_rng(seed)
+        self.eval = eval
 
     def __call__(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         points_batch: List[torch.Tensor] = []
@@ -123,7 +124,10 @@ class InContextDiffusionCollator:
             tokens = sample["tokens"]
             reset_idx = (tokens[:, 5] == 1.0).nonzero(as_tuple=True)[0]
             query_len = tokens.shape[0] - reset_idx
-            start_idx = int(self.rng.integers(reset_idx, reset_idx + query_len))
+            if self.eval:
+                start_idx = reset_idx
+            else:
+                start_idx = int(self.rng.integers(reset_idx, reset_idx + query_len))
             points = tokens[:start_idx].clone()
             actions = tokens[start_idx : start_idx + self.horizon].clone()
 
@@ -155,7 +159,7 @@ class InContextDiffusionCollator:
             mask[idx, -(points_len + self.horizon) :] = True
             actions[idx, : self.horizon] = acts
 
-        return {"points": points, "actions": actions, "mask": mask}
+        return {"context": points, "actions": actions, "mask": mask}
 
     def _pad_actions(self, actions: torch.Tensor) -> torch.Tensor:
         """Pads actions that are shorter than the horizon with end-tokens."""

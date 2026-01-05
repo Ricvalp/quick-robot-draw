@@ -249,8 +249,7 @@ def main(_) -> None:
 
     # scheduler = CosineAnnealingLR(optimizer, T_max=total_train_steps, eta_min=1e-6)
 
-    save_dir = Path(cfg.checkpoint.dir)
-    save_dir.mkdir(parents=True, exist_ok=True)
+    base_save_dir = Path(cfg.checkpoint.dir)
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Model parameter count: {total_params:,}")
@@ -299,14 +298,20 @@ def main(_) -> None:
                 "manifest": dataset.manifest,
             },
         )
+        wandb.run.name = wandb.run.id
+        wandb.run.save()
         wandb.log({"model/parameters": total_params}, step=0)
+
+    if cfg.wandb.use and wandb.run is not None:
+        save_dir = base_save_dir / wandb.run.id
+    else:
+        save_dir = base_save_dir
+    save_dir.mkdir(parents=True, exist_ok=True)
 
     global_step = 0
 
     for epoch in range(cfg.training.epochs):
         model.train()
-        running = 0.0
-        batches = 0
         progress = tqdm(
             dataloader, desc=f"Epoch {epoch + 1}/{cfg.training.epochs}", leave=False
         )
@@ -335,8 +340,6 @@ def main(_) -> None:
             )
             optimizer.step()
 
-            running += float(loss.detach().cpu())
-            batches += 1
             progress.set_postfix({"loss": metrics["loss"], "kl": metrics["kl"]})
 
             global_step += 1
@@ -355,17 +358,6 @@ def main(_) -> None:
                     step=global_step,
                 )
 
-        if batches == 0:
-            raise RuntimeError(
-                "No valid batches processed; consider reducing max_seq_len or batch size."
-            )
-
-        avg_loss = running / batches
-        print(f"Epoch {epoch + 1}: avg loss {avg_loss:.6f}")
-
-        if cfg.wandb.use:
-            wandb.log({"train/loss": avg_loss, "epoch": epoch + 1})
-
         if (
             cfg.checkpoint.save_interval is not None
             and (epoch + 1) % max(1, cfg.checkpoint.save_interval) == 0
@@ -381,36 +373,34 @@ def main(_) -> None:
                 checkpoint_path,
             )
 
-        if epoch % cfg.eval.interval == 0:
+        try:
+            eval_batch = next(eval_iterator)
+            eval_contexts = eval_batch["contexts"].to(device)
+            eval_contexts_lengths = eval_batch["contexts_lengths"].to(device)
+        except StopIteration:
+            eval_iterator = iter(eval_dataloader)
+            eval_batch = next(eval_iterator)
+            eval_contexts = eval_batch["contexts"].to(device)
+            eval_contexts_lengths = eval_batch["contexts_lengths"].to(device)
 
-            try:
-                eval_batch = next(eval_iterator)
-                eval_contexts = eval_batch["contexts"].to(device)
-                eval_contexts_lengths = eval_batch["contexts_lengths"].to(device)
-            except StopIteration:
-                eval_iterator = iter(eval_dataloader)
-                eval_batch = next(eval_iterator)
-                eval_contexts = eval_batch["contexts"].to(device)
-                eval_contexts_lengths = eval_batch["contexts_lengths"].to(device)
-
-            _log_qualitative_samples(
-                policy=model,
-                context=contexts,
-                context_lengths=contexts_lengths,
-                cfg=cfg,
-                split=cfg.data.split,
-                step=global_step,
-                device=device,
-            )
-            _log_qualitative_samples(
-                policy=model,
-                context=eval_contexts,
-                context_lengths=eval_contexts_lengths,
-                cfg=cfg,
-                split="eval",
-                step=global_step,
-                device=device,
-            )
+        _log_qualitative_samples(
+            policy=model,
+            context=contexts[: cfg.eval.samples],
+            context_lengths=contexts_lengths[: cfg.eval.samples],
+            cfg=cfg,
+            split=cfg.data.split,
+            step=global_step,
+            device=device,
+        )
+        _log_qualitative_samples(
+            policy=model,
+            context=eval_contexts,
+            context_lengths=eval_contexts_lengths,
+            cfg=cfg,
+            split="eval",
+            step=global_step,
+            device=device,
+        )
 
     if cfg.wandb.project:
         wandb.finish()

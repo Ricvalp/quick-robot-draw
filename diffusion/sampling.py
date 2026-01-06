@@ -13,7 +13,6 @@ __all__ = [
     "InContextDiffusionCollatorEval",
     "sample_quickdraw_tokens_encoder_decoder",
     "sample_quickdraw_tokens_decoder_only",
-    "sample_quickdraw_tokens_unconditional",
     "tokens_to_figure",
     "tokens_to_gif",
 ]
@@ -49,42 +48,6 @@ class InContextDiffusionCollatorEval:
             mask[idx, -points_len:] = True
 
         return {"points": points, "mask": mask}
-
-
-@torch.no_grad()
-def sample_quickdraw_tokens_unconditional(
-    policy: torch.nn.Module,
-    max_tokens: int,
-    *,
-    context: Optional[torch.Tensor] = None,
-    generator: Optional[torch.Generator] = None,
-) -> torch.Tensor:
-    """Sample `total_tokens` conditioned on the growing context."""
-
-    device = next(policy.parameters()).device
-    feature_dim = policy.cfg.point_feature_dim
-
-    if context is None:
-        context = torch.tensor([[0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]]).to(device=device)
-    else:
-        if context.shape[-1] != feature_dim:
-            raise ValueError(
-                f"context feature dim {context.shape[-1]} != {feature_dim}."
-            )
-        context = context.to(device=device)
-
-    horizon = policy.cfg.horizon
-    num_chunks = math.ceil(max_tokens / horizon)
-    samples: list[torch.Tensor] = []
-
-    for _ in range(num_chunks):
-        actions = policy.sample_actions(context, generator=generator)
-        samples.append(actions)
-        context = torch.cat([context, actions], dim=1)
-
-    generated = torch.cat(samples, dim=1)
-    sketches = clean_sketches(generated)
-    return sketches
 
 
 @torch.no_grad()
@@ -138,7 +101,7 @@ def sample_quickdraw_tokens_encoder_decoder(
         )
 
     generated = torch.cat(samples, dim=1)
-    sketches = clean_sketches(generated)
+    sketches = clean_sketches_encoder_decoder(generated)
     return sketches
 
 
@@ -190,11 +153,25 @@ def sample_quickdraw_tokens_decoder_only(
         mask = torch.cat([mask, torch.ones(actions.shape[:2]).to(device).bool()], dim=1)
 
     generated = torch.cat(samples, dim=1)
-    sketches = clean_sketches(generated)
+    sketches = clean_sketches_decoder_only(generated)
     return sketches
 
 
-def clean_sketches(generated):
+def clean_sketches_decoder_only(generated):
+
+    sketches = []
+    for sketch in generated:
+        end_idx = (sketch[:, 6] >= 0.5).nonzero(as_tuple=True)[0]
+        if end_idx.numel() > 0:
+            end_idx = end_idx[0]
+        else:
+            end_idx = sketch.shape[0]
+        sketches.append(sketch[:end_idx, :3])
+
+    return sketches
+
+
+def clean_sketches_encoder_decoder(generated):
 
     sketches = []
     for sketch in generated:

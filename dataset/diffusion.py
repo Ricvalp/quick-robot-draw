@@ -122,7 +122,9 @@ class InContextDiffusionCollator:
 
         for sample in batch:
             tokens = sample["tokens"]
-            reset_idx = (tokens[:, 5] == 1.0).nonzero(as_tuple=True)[0]
+            reset_idx = (tokens[:, 5] == 1.0).nonzero(as_tuple=True)[
+                0
+            ] + 2  # +2 to move past reset token
             query_len = tokens.shape[0] - reset_idx
             if self.eval:
                 start_idx = reset_idx

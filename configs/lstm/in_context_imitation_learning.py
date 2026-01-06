@@ -5,7 +5,7 @@ def get_config() -> ConfigDict:
 
     cfg = ConfigDict()
     cfg.run = ConfigDict()
-    cfg.run.seed = 2024
+    cfg.run.seed = 2026
     cfg.run.device = "cuda"  # or "cpu"
 
     cfg.data = ConfigDict()
@@ -21,12 +21,12 @@ def get_config() -> ConfigDict:
     cfg.data.ids_dir = "metrics/index/ids_family/"
 
     cfg.loader = ConfigDict()
-    cfg.loader.batch_size = 64
-    cfg.loader.num_workers = 16
+    cfg.loader.batch_size = 256
+    cfg.loader.num_workers = 12
 
     cfg.training = ConfigDict()
-    cfg.training.epochs = 100
-    cfg.training.lr = 1e-3
+    cfg.training.epochs = 1000
+    cfg.training.lr = 1e-4
     cfg.training.weight_decay = 0.0
     cfg.training.grad_clip = 1.0
 
@@ -52,7 +52,7 @@ def get_config() -> ConfigDict:
 
     cfg.checkpoint = ConfigDict()
     cfg.checkpoint.dir = "lstm/checkpoints"
-    cfg.checkpoint.save_interval = 10
+    cfg.checkpoint.save_interval = 1
 
     cfg.eval = ConfigDict()
     cfg.eval.samples = 16

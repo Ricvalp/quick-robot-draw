@@ -14,3 +14,7 @@ profiling/
 
 episode_lengths*
 metrics/index/
+
+.smanager
+sweeps.py
+

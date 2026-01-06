@@ -323,20 +323,20 @@ def main(_) -> None:
                     step=global_step,
                 )
 
-            try:
-                eval_batch = next(eval_iterator)
-            except StopIteration:
-                eval_iterator = iter(eval_dataloader)
-                eval_batch = next(eval_iterator)
+        try:
+            eval_batch = next(eval_iterator)
+        except StopIteration:
+            eval_iterator = iter(eval_dataloader)
+            eval_batch = next(eval_iterator)
 
-            _log_qualitative_samples(
-                policy=policy,
-                context=eval_batch,
-                split="eval",
-                cfg=cfg,
-                step=global_step,
-                device=device,
-            )
+        _log_qualitative_samples(
+            policy=policy,
+            context=eval_batch,
+            split="eval",
+            cfg=cfg,
+            step=global_step,
+            device=device,
+        )
 
         if (
             cfg.checkpoint.save_interval is not None

@@ -13,15 +13,15 @@ def get_config() -> ConfigDict:
     cfg.data.split = "train"
     cfg.data.backend = "lmdb"
     cfg.data.K = 4
+    cfg.data.max_seq_len = 480
     cfg.data.max_query_len = 60
-    cfg.data.max_context_len = 300
-    cfg.data.max_seq_len = 360
+    cfg.data.max_context_len = 400
     cfg.data.coordinate_mode = "absolute"
     cfg.data.index_dir = "metrics/index/faiss_index/"
     cfg.data.ids_dir = "metrics/index/ids_family/"
 
     cfg.loader = ConfigDict()
-    cfg.loader.batch_size = 128
+    cfg.loader.batch_size = 256
     cfg.loader.num_workers = 16
 
     cfg.training = ConfigDict()
@@ -30,7 +30,7 @@ def get_config() -> ConfigDict:
     cfg.training.weight_decay = 0.0
 
     cfg.training.warmup_cosine_annealing = ConfigDict()
-    cfg.training.warmup_cosine_annealing.use = True
+    cfg.training.warmup_cosine_annealing.use = False
     cfg.training.warmup_cosine_annealing.warmup_steps = 5000
     cfg.training.warmup_cosine_annealing.T_max = 20000
     cfg.training.warmup_cosine_annealing.max_lr = 1e-3
@@ -75,7 +75,7 @@ def get_config() -> ConfigDict:
 
     cfg.wandb = ConfigDict()
     cfg.wandb.use = True
-    cfg.wandb.project = "diffusion-imitation-learning"
+    cfg.wandb.project = "diffusion-in-context-imitation-learning-sweeps"
     cfg.wandb.entity = "ricvalp"
     cfg.wandb.log_interval = 200
     cfg.wandb.log_all = False

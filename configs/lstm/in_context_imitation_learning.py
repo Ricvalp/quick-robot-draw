@@ -31,7 +31,7 @@ def get_config() -> ConfigDict:
     cfg.training.grad_clip = 1.0
 
     cfg.training.warmup_cosine_annealing = ConfigDict()
-    cfg.training.warmup_cosine_annealing.use = True
+    cfg.training.warmup_cosine_annealing.use = False
     cfg.training.warmup_cosine_annealing.warmup_steps = 5000
     cfg.training.warmup_cosine_annealing.T_max = 20000
     cfg.training.warmup_cosine_annealing.max_lr = 1e-3
@@ -80,7 +80,7 @@ def get_config() -> ConfigDict:
 
     cfg.wandb = ConfigDict()
     cfg.wandb.use = True
-    cfg.wandb.project = "lstm-imitation-learning"
+    cfg.wandb.project = "lstm-in-context-imitation-learning-sweeps"
     cfg.wandb.entity = "ricvalp"
     cfg.wandb.log_interval = 200
     cfg.wandb.log_all = False

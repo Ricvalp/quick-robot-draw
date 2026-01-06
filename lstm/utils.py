@@ -75,11 +75,16 @@ class WarmupCosineScheduler:
             # ------- Linear warmup -------
             lr = self.max_lr * (self.step_num / self.warmup_steps)
 
+        elif self.step_num >= self.total_steps:
+            # ------- Hold min lr after schedule ends -------
+            lr = self.min_lr
+
         else:
             # ------- Cosine decay -------
             progress = (self.step_num - self.warmup_steps) / (
                 self.total_steps - self.warmup_steps
             )
+            progress = min(max(progress, 0.0), 1.0)
             lr = self.min_lr + (self.max_lr - self.min_lr) * 0.5 * (
                 1 + math.cos(math.pi * progress)
             )

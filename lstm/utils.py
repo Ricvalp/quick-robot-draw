@@ -92,3 +92,11 @@ class WarmupCosineScheduler:
 
     def get_last_lr(self):
         return self.optimizer.param_groups[0]["lr"]
+
+
+class CosineAnnealingLR(torch.optim.lr_scheduler.CosineAnnealingLR):
+    """
+    Subclass of PyTorch's CosineAnnealingLR to fix type hinting issues.
+    """
+
+    pass

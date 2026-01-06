@@ -12,6 +12,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torch
 from ml_collections import config_flags
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -22,7 +23,7 @@ from dataset.episode_builder import EpisodeBuilderSimilar
 from dataset.loader import QuickDrawEpisodes
 from dataset.lstm import InContextSketchRNNCollator
 from lstm import SketchRNN, SketchRNNConfig
-from lstm.utils import strokes_to_tokens, trim_strokes_to_eos
+from lstm.utils import WarmupCosineScheduler, strokes_to_tokens, trim_strokes_to_eos
 
 _CONFIG_FILE = config_flags.DEFINE_config_file(
     "config", default="lstm/configs/in_context_imitation_learning.py"
@@ -247,7 +248,26 @@ def main(_) -> None:
         model.parameters(), lr=cfg.training.lr, weight_decay=cfg.training.weight_decay
     )
 
-    # scheduler = CosineAnnealingLR(optimizer, T_max=total_train_steps, eta_min=1e-6)
+    if cfg.training.warmup_cosine_annealing.use:
+        scheduler_cfg = cfg.training.warmup_cosine_annealing
+
+        scheduler = WarmupCosineScheduler(
+            optimizer,
+            warmup_steps=scheduler_cfg.warmup_steps,
+            total_steps=scheduler_cfg.T_max,
+            max_lr=scheduler_cfg.max_lr,
+            min_lr=scheduler_cfg.min_lr,
+        )
+
+    elif cfg.training.cosine_annealing.use:
+        scheduler_cfg = cfg.training.cosine_annealing
+
+        scheduler = CosineAnnealingLR(
+            optimizer, T_max=scheduler_cfg.T_max, eta_min=scheduler_cfg.eta_min
+        )
+
+    else:
+        scheduler = None
 
     base_save_dir = Path(cfg.checkpoint.dir)
 
@@ -281,6 +301,8 @@ def main(_) -> None:
                     model.parameters(), max_norm=cfg.training.grad_clip
                 )
                 optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
 
                 if step > 3:
                     break
@@ -299,7 +321,6 @@ def main(_) -> None:
             },
         )
         wandb.run.name = wandb.run.id
-        wandb.run.save()
         wandb.log({"model/parameters": total_params}, step=0)
 
     if cfg.wandb.use and wandb.run is not None:
@@ -339,6 +360,8 @@ def main(_) -> None:
                 model.parameters(), max_norm=cfg.training.grad_clip
             )
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
 
             progress.set_postfix({"loss": metrics["loss"], "kl": metrics["kl"]})
 
@@ -354,6 +377,7 @@ def main(_) -> None:
                         "train/recon": metrics["recon"],
                         "train/kl": metrics["kl"],
                         "train/kl_weight": metrics["kl_weight"],
+                        "train/lr": optimizer.param_groups[0]["lr"],
                     },
                     step=global_step,
                 )

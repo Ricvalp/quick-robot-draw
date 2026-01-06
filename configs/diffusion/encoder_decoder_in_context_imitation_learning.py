@@ -29,6 +29,18 @@ def get_config() -> ConfigDict:
     cfg.training.lr = 1e-4
     cfg.training.weight_decay = 0.0
 
+    cfg.training.warmup_cosine_annealing = ConfigDict()
+    cfg.training.warmup_cosine_annealing.use = True
+    cfg.training.warmup_cosine_annealing.warmup_steps = 5000
+    cfg.training.warmup_cosine_annealing.T_max = 20000
+    cfg.training.warmup_cosine_annealing.max_lr = 1e-3
+    cfg.training.warmup_cosine_annealing.min_lr = 1e-5
+
+    cfg.training.cosine_annealing = ConfigDict()
+    cfg.training.cosine_annealing.use = False
+    cfg.training.cosine_annealing.T_max = 20000
+    cfg.training.cosine_annealing.eta_min = 1e-6
+
     cfg.logging = ConfigDict()
     cfg.logging.loss_log_every = 100
 

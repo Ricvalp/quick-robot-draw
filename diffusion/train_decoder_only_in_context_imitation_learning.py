@@ -9,6 +9,7 @@ from pathlib import Path
 
 import torch
 from ml_collections import ConfigDict, config_flags
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -18,6 +19,7 @@ from dataset.episode_builder import EpisodeBuilderSimilar
 from dataset.loader import QuickDrawEpisodes
 from diffusion import DiTDiffusionPolicy, DiTDiffusionPolicyConfig
 from diffusion.sampling import sample_quickdraw_tokens_decoder_only
+from lstm.utils import WarmupCosineScheduler
 
 
 def load_config(_CONFIG_FILE: str) -> ConfigDict:
@@ -236,6 +238,27 @@ def main(_) -> None:
         policy.parameters(), lr=cfg.training.lr, weight_decay=cfg.training.weight_decay
     )
 
+    if cfg.training.warmup_cosine_annealing.use:
+        scheduler_cfg = cfg.training.warmup_cosine_annealing
+
+        scheduler = WarmupCosineScheduler(
+            optimizer,
+            warmup_steps=scheduler_cfg.warmup_steps,
+            total_steps=scheduler_cfg.T_max,
+            max_lr=scheduler_cfg.max_lr,
+            min_lr=scheduler_cfg.min_lr,
+        )
+
+    elif cfg.training.cosine_annealing.use:
+        scheduler_cfg = cfg.training.cosine_annealing
+
+        scheduler = CosineAnnealingLR(
+            optimizer, T_max=scheduler_cfg.T_max, eta_min=scheduler_cfg.eta_min
+        )
+
+    else:
+        scheduler = None
+
     base_save_dir = Path(cfg.checkpoint.dir)
 
     if cfg.wandb.use and cfg.wandb.project:
@@ -248,7 +271,6 @@ def main(_) -> None:
             },
         )
         wandb.run.name = wandb.run.id
-        wandb.run.save()
         total_params = sum(p.numel() for p in policy.parameters())
         print(f"Model parameter count: {total_params:,}")
         wandb.log({"model/parameters": total_params}, step=0)
@@ -282,6 +304,9 @@ def main(_) -> None:
             torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
             optimizer.step()
 
+            if scheduler is not None:
+                scheduler.step()
+
             global_step += 1
             progress.set_postfix({"mse": metrics["mse"]})
 
@@ -290,7 +315,13 @@ def main(_) -> None:
                 and cfg.logging.loss_log_every > 0
                 and global_step % cfg.logging.loss_log_every == 0
             ):
-                wandb.log({"train/batch_loss": metrics["mse"]}, step=global_step)
+                wandb.log(
+                    {
+                        "train/loss": metrics["mse"],
+                        "train/lr": optimizer.param_groups[0]["lr"],
+                    },
+                    step=global_step,
+                )
 
         try:
             eval_batch = next(eval_iterator)

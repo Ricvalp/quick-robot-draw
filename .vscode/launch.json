@@ -38,7 +38,8 @@
                 "--config.data.root=data/all-classes/train-val-split/",
                 "--config.loader.num_workers=0",
                 "--config.wandb.use=True",
-                "--config.data.K=4"
+                "--config.data.K=4",
+                // "--config.data.coordinate_mode=absolute",
             ]
         },
         {

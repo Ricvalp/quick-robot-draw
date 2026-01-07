@@ -152,7 +152,7 @@ def _log_qualitative_samples(
             axes[len(prompts)],
             sample_tokens,
             "Reconstruction",
-            "delta",
+            cfg.data.coordinate_mode,
         )
 
         for ax in axes[total_plots:]:

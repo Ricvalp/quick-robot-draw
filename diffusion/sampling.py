@@ -181,15 +181,6 @@ def sample_quickdraw_tokens_decoder_only(
     context = demos["context"]
     mask = demos["mask"]
 
-    # history = torch.tensor([[0.0, 0.0, 0.0, 0.0, 1.0, 0.0]], device=device).tile(
-    #     (context.shape[0], 1, 1)
-    # )
-
-    # history_mask = torch.ones(history.shape[:2]).to(device=device).bool()
-    # history_mask = torch.cat(
-    #     [history_mask, torch.ones(history.shape[0], horizon).to(device).bool()], dim=1
-    # )
-
     for _ in range(max_chunks):
         actions = policy.sample_actions(
             context=context,

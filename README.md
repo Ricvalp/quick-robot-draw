@@ -1,259 +1,170 @@
 # Quick, Robot, Draw!
 
-**Quick, Robot, Draw!** turns Google’s Quick, Draw! sketches into normalized sequence data ready for *in-context* imitation learning with transformer-based diffusion policies, state-space models, and other sequence learners. The pipeline ingests the official `.ndjson` or `.bin` releases, preprocesses every sketch into absolute and delta trajectories with pen-state channels, assembles configurable K-shot prompt/query episodes, and stores everything in efficient backends with PyTorch-friendly loaders.
+Quick, Robot, Draw! turns Google’s Quick, Draw! sketches into an in-context imitation-learning benchmark. It normalises strokes into token sequences, builds K-shot episodes, and trains three policy families (DiT encoder–decoder, DiT decoder-only, and a bi-LSTM SketchRNN). Prompts for the query sketch can be picked as nearest neighbours in an embedding space built from rasterised sketches.
 
-### A cat and a basketbal drawn by a diffusion policy
+![Placeholder: model samples](figures/placeholder_samples.gif)
 
-<p>
-  <img src="readme/sample_002.gif" width="320" alt="A cat">
-  <img src="readme/sample_005.gif" width="320" alt="A basketball">
-</p>
----
+## What you get
+- Preprocessing from `.ndjson/.bin` QuickDraw files into centred, scaled sequences (absolute + deltas) with pen/start/sep/reset/stop channels.
+- On-the-fly K-shot episodes for in-context imitation learning; optional nearest-neighbour prompt retrieval (cosine similarity on rasterised embeddings with Faiss).
+- Ready-to-run configs and scripts for three architectures: DiT encoder–decoder, DiT decoder-only, and bi-LSTM SketchRNN.
+- Utilities for rasterising sketches, sampling qualitative outputs, and computing FID-style metrics.
 
-## The Dataset
-
-- **Consistent geometry:** every sketch is centered, scaled into `[-1, 1]^2`, and available as both absolute points and cumulative deltas.
-- **Episode-aware:** episodes follow the structure `[START, prompt₁, SEP, …, RESET, START, query, STOP]` with binary control channels (pen, start, sep, reset, stop) so transformers and diffusion models can consume a single token stream.
-- **High-throughput I/O:** supports LMDB, WebDataset shards, or HDF5 for cached sketches/episodes plus deterministic PyTorch `Dataset` + collate utilities.
-- **Inspectable + verifiable:** ships with scripts to visualize, profile, and sanity-check the processed cache.
-
----
-
-## 1. Requirements
-
-- Python 3.9+
-- `pip install numpy torch lmdb h5py msgpack PyYAML tqdm matplotlib`
-  - Install the appropriate PyTorch wheel for your platform/CUDA setup via [pytorch.org](https://pytorch.org/get-started/locally/).
-- `gsutil` for downloading the raw QuickDraw release.
-
----
-
-## 2. Download the raw Quick, Draw! data
-
-Quick, Robot, Draw! expects the official QuickDraw `.ndjson` or `.bin` files to live under a `raw_root` directory (default `raw/`). Pull whichever categories/splits you need:
-
+## Setup
 ```bash
-# Install Google Cloud SDK for gsutil if necessary.
+python -m venv .venv && source .venv/bin/activate        # optional
+pip install -r requirements.txt
+export PYTHONPATH=.
+```
+
+## 1) Download the raw QuickDraw data
+Place the official QuickDraw release under `raw/` (or point configs to your location):
+```bash
 mkdir -p raw
 gsutil -m cp 'gs://quickdraw_dataset/full/simplified/*.ndjson' raw/
-# or selectively:
+# or fetch a subset:
 gsutil cp 'gs://quickdraw_dataset/full/raw/cat.ndjson' raw/
 ```
 
-You can also download individual files via the [Cloud Storage browser](https://console.cloud.google.com/storage/browser/quickdraw_dataset/), then place them under `raw/`.
-
----
-
-## 3. Configure the dataset build
-
-`config/data_config.yaml` controls preprocessing and storage:
-
-```yaml
-root: "data/"           # where processed caches + manifest live
-raw_root: "raw/"        # where the downloaded .ndjson/.bin files live
-backend: "lmdb"         # lmdb | webdataset | hdf5
-num_prompts: 5          # K-shot size
-max_seq_len: 512        # episode token cap
-normalize: true         # center & scale each sketch
-resample:
-  points: null          # optionally force per-stroke point count
-augmentations:          # applied online during episode sampling
-  rotation: true
-  scale: true
-  translation: true
-storage:
-  compression: "zstd"
-  shards: 64
-max_sketches_per_file: null  # cap sketches pulled from each raw file
-families: null               # optionally whitelist specific categories
-```
-
-Adjust `raw_root`/`root` to match your filesystem. If you only want a subset, place just those files under `raw_root` or run with `--max-files` to cap the build pass.
-
----
-
-## 4. Build the processed cache
+## 2) Build the processed dataset
+`scripts/build_dataset.py` preprocesses strokes, stores them in LMDB/WebDataset/HDF5, and writes a manifest. Key config knobs live in `configs/dataset/build_dataset.py` (root paths, backend, K-shot size used for any prebuilt episodes, max token lengths, augmentations).
 
 ```bash
 PYTHONPATH=. python scripts/build_dataset.py \
-    --config config/data_config.yaml \
-    --num-workers 4 \
-    --max-files 5      # optional while testing
+  --config configs/dataset/build_dataset.py \
+  --config.root data/all-classes/train-val-split/ \
+  --config.raw_root raw/ \
+  --config.num_workers 8
 ```
 
-This will:
+Outputs live under `data/...`:
+- `DatasetManifest.json` with counts, split map, and normalization stats.
+- `sketches/` (processed absolute + delta coordinates with pen flags).
+- `episodes/` if you enable `num_prebuilt_episodes` in the config.
 
-1. Iterate through every `.ndjson`/`.bin` under `raw_root`.
-2. Resample strokes (optional), flatten the strokes, and emit pen-up/down markers.
-3. Normalize each sketch into `[-1, 1]^2` and compute `(dx, dy)` deltas.
-4. Cache both representations plus metadata in the chosen backend (`data/sketches/...`).
-5. Write `data/DatasetManifest.json` with counts, normalization stats, and per-family split assignments (train/val/test).
-6. Optionally prebuild episodes (`num_prebuilt_episodes`) inside `data/episodes/`.
-
-Use `--force` to rebuild even if a manifest already exists, and `--max-files` to process only the first *N* raw files on a pass.
-
-![Generated sketches](figures/generated_samples.gif)
-
----
-
-## 5. Episode structure
-
-Each episode contains `K` prompt sketches and one query sketch sampled from the same family:
-
-```
-[START, prompt₁, SEP, prompt₂, SEP, …, promptK, SEP, RESET,
- START, query, STOP]
-```
-
-![Example Sketches](readme/example_sketches.png)
-
-![Episode Tokens](readme/example_tokens.png)
-
-Tokens are float vectors of width 7:
-
-| Channel | Description                         |
-|---------|-------------------------------------|
-| 0–1     | `dx, dy` deltas                     |
-| 2       | pen state (1 = drawing, 0 = lift)   |
-| 3       | start flag                          |
-| 4       | separator flag                      |
-| 5       | reset flag                          |
-| 6       | stop flag                           |
-
-Per-token metadata (family IDs, prompt/query IDs, lengths) accompanies every episode so diffusion/transformer policies can condition on prompts and evaluate queries in-context.
-
----
-
-## 6. Loading episodes in PyTorch
-
-```python
-from dataset.loader import QuickDrawEpisodes, QuickDrawEpisodesAbsolute, quickdraw_collate_fn
-
-dataset = QuickDrawEpisodes(
-    root="data/",
-    split="train",
-    K=5,
-    backend="lmdb",
-    max_seq_len=512,
-    augment=True,
-)
-
-from torch.utils.data import DataLoader
-loader = DataLoader(dataset, batch_size=16, collate_fn=quickdraw_collate_fn)
-
-for batch in loader:
-    tokens = batch["tokens"]      # (B, T, 7)
-    mask = batch["mask"]          # (B, T)
-    # feed tokens/mask to transformer, diffusion policy, or SSM
-```
-
-Need absolute positions instead of deltas? Use the convenience subclass:
-
-```python
-dataset = QuickDrawEpisodesAbsolute(root="data/", split="train", K=5)
-```
-
-or pass `coordinate_mode="absolute"` to `QuickDrawEpisodes`.
-
-`QuickDrawEpisodes` assembles episodes lazily from cached sketches, applying deterministic per-worker seeds and optional online augmentations (rotation/scale/translation/jitter). The provided `collate_fn` pads sequences and emits masks for turnkey batching.
-
-#### Diffusion-ready batches
-
-Diffusion transformers that observe the prompts plus the first `S` query tokens and denoise the next `H` tokens can use the `CollateDiffusionInContext` wrapper:
-
-```python
-from dataset.loader import QuickDrawEpisodes
-from dataset.diffusion import CollateDiffusionInContext
-from torch.utils.data import DataLoader
-
-episodes = QuickDrawEpisodes(root="data/", split="train", K=5)
-collator = CollateDiffusionInContext(horizon=64)  # randomly samples S per episode
-loader = DataLoader(episodes, batch_size=16, collate_fn=collator)
-
-batch = next(iter(loader))
-tokens = batch["tokens"]              # padded episode tokens
-context_mask = batch["context_mask"]  # prompt + observed query tokens
-target_mask = batch["target_mask"]    # denoised segment (length ≤ H)
-```
-
-The collator uniformly samples how many query tokens to reveal before denoising, anywhere between `0` and the largest value that still leaves `H` tokens for diffusion. Batch dictionaries now include `observed_query_tokens`, `context_mask`, and `target_mask` while preserving all fields from `quickdraw_collate_fn`.
-
-For unconditional sketch generation (no prompt context), use the new `DiffusionCollator`, which treats the entire sketch history as context and provides only the horizon chunk as the diffusion target.
-
-To launch end-to-end training with the DiT diffusion policy implementation in `diffusion_policy/`, run:
-
-```
-PYTHONPATH=. python diffusion_policy/train_quickdraw.py --data-root data/ --horizon 64
-```
-
-The script wraps `QuickDrawEpisodes` into the fixed-width tensors required by `DiTDiffusionPolicy` and trains using a simple AdamW loop.
-
----
-
-## 7. Utility scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/visualize_episode.py` | Sample an episode, plot the concatenated trajectory + per-sketch panels, and save PNGs to `figures/`. |
-| `scripts/verify_dataset.py` | Validate counts, check for NaNs/shape issues, and sample episodes for sanity. |
-| `scripts/profile_loading.py` | Benchmark DataLoader throughput (episodes/sec, tokens/sec). |
-
-Run the scripts with `PYTHONPATH=.` so they can import the package modules.
-
----
-
-## 8. Storage layout
-
-```
-data/
-  DatasetManifest.json      # config + stats
-  sketches/                 # LMDB/WebDataset/HDF5 backend cache
-  episodes/                 # optional prebuilt episodes (same backend)
-raw/                        # your downloaded QuickDraw files (input only)
-figures/                    # visualizations from visualize_episode.py
-```
-
-Switching backends only affects how the `sketches/` and `episodes/` directories are structured—the higher-level APIs stay identical.
-
----
-
-## 9. Extending beyond Quick, Draw!
-
-The preprocessing + episode builder stack only assumes `"family_id"` and a list of stroke arrays. To plug in datasets like Omniglot or LASA:
-
-1. Implement a raw loader that yields `RawSketch` instances.
-2. Reuse `QuickDrawPreprocessor` or subclass it for dataset-specific normalization.
-3. Store the processed sketches through `SketchStorage` and use `EpisodeBuilder`/`QuickDrawEpisodes` unchanged.
-
----
-
-# Training policies
-
-You can train both a BiLSTM (SketchRNN) baseline and a DiT diffusion policy on:
-- **Unconditional single-class generation:** train on one category (set `families` in `config/data_config.yaml` and `K=0` to drop prompts).
-- **Multi-class in-context imitation learning:** train on episodes with prompts + query across all families (default `K>0`).
-
-### BiLSTM (SketchRNN)
-
-Unconditional / single-class generation (set `families` in the data config and `K=0`):
+Sanity check a few sketches:
 ```bash
-PYTHONPATH=. python lstm/train_imitation_learning.py \
-  --config lstm/configs/imitation_learning.py \
-  --config.data_root data/ \
-  --config.K 1 \
+PYTHONPATH=. python scripts/inspect_dataset.py \
+  --config configs/dataset/inspect_dataset.py \
+  --config.root data/all-classes/train-val-split/
 ```
+Images are written to `figures/inspect/`.
 
-### DiT Diffusion Policy
-Unconditional / single-class generation (set `families` in the data config and `K=0`):
+## 3) Nearest-neighbour prompts (recommended)
+EpisodeBuilderSimilar chooses the K prompt sketches closest to the query using cosine similarity on rasterised embeddings.
+
+1. Ensure a ResNet checkpoint for embeddings (default path: `metrics/checkpoints/resnet18_step40000.pt`). Train your own on cached raster images if needed:
+   ```bash
+   PYTHONPATH=. python metrics/train_resnet18.py --config configs/metrics/train.py
+   ```
+   (Create cached shards with `scripts/cache_images.py` if you want to retrain.)
+
+2. Compute embeddings for every processed sketch (per family) and store IDs:
+   ```bash
+   PYTHONPATH=. python metrics/compute_embeddings.py \
+     --config configs/metrics/build_faiss_index.py \
+     --config.dataset_path data/all-classes/train-val-split/ \
+     --config.out_dir metrics/index/ \
+     --rasterizer_config configs/metrics/cache.py
+   ```
+
+3. Build Faiss indices (inner product over L2-normalised embeddings ⇒ cosine similarity):
+   ```bash
+   PYTHONPATH=. python metrics/build_faiss_index.py \
+     --config configs/metrics/build_faiss_index.py
+   ```
+
+Training configs expect `metrics/index/faiss_index/` and `metrics/index/ids_family/` so EpisodeBuilderSimilar can load them. If you prefer random prompts, swap `EpisodeBuilderSimilar` for `EpisodeBuilder` in the loaders.
+
+## 4) Train policies
+All commands assume the dataset root is `data/all-classes/train-val-split/` and the Faiss assets are in `metrics/index/`. Override paths as needed.
+
+### DiT decoder-only (in-context diffusion)
+Condition on prompts + partial query, denoise the next horizon chunk.
 ```bash
-PYTHONPATH=. python diffusion_policy/train_imitation_learning.py \
-  --config diffusion_policy/configs/imitation_learning.py \
-  --config.data_root data/ \
-  --config.K 1 \
+PYTHONPATH=. python diffusion/train_decoder_only_in_context_imitation_learning.py \
+  --config configs/diffusion/decoder_only_in_context_imitation_learning.py \
+  --config.data.root data/all-classes/train-val-split/ \
+  --config.data.index_dir metrics/index/faiss_index/ \
+  --config.data.ids_dir metrics/index/ids_family/ \
+  --config.checkpoint.dir diffusion/checkpoints/decoder_only
 ```
 
+### DiT encoder–decoder (context/query split)
+Encodes prompts, decodes the query segment with cross-attention.
+```bash
+PYTHONPATH=. python diffusion/train_encoder_decoder_in_context_imitation_learning.py \
+  --config configs/diffusion/encoder_decoder_in_context_imitation_learning.py \
+  --config.data.root data/all-classes/train-val-split/ \
+  --config.data.index_dir metrics/index/faiss_index/ \
+  --config.data.ids_dir metrics/index/ids_family/ \
+  --config.checkpoint.dir diffusion/checkpoints/encoder_decoder
+```
+
+### Bi-LSTM SketchRNN (in-context)
+Delta-coordinate baseline with mixture density decoder.
+```bash
+PYTHONPATH=. python lstm/train_in_context_imitation_learning.py \
+  --config configs/lstm/in_context_imitation_learning.py \
+  --config.data.root data/all-classes/train-val-split/ \
+  --config.data.index_dir metrics/index/faiss_index/ \
+  --config.data.ids_dir metrics/index/ids_family/ \
+  --config.checkpoint.dir lstm/checkpoints
+```
+
+For unconditional or single-class training, use the `configs/*/imitation_learning.py` variants (set `K=0` and point `families` in the dataset config to your category list).
+
+## 5) Evaluate and sample
+- **Diffusion FID / qualitative grids:** set checkpoint name + epoch in the eval config and run:
+  ```bash
+  PYTHONPATH=. python diffusion/evaluate_decoder_only_in_context_imitation_learning.py \
+    --config configs/diffusion/evaluate_decoder_only_in_context_imitation_learning.py \
+    --config.data.root data/all-classes/train-val-split/ \
+    --config.data.index_dir metrics/index/faiss_index/ \
+    --config.data.ids_dir metrics/index/ids_family/ \
+    --config.checkpoint.name policy_epoch_010.pt \
+    --config.checkpoint.epoch 10
+  ```
+  Use the encoder–decoder eval script for that variant. Both rely on `metrics/checkpoints/resnet18_step40000.pt` for features.
+
+- **LSTM sampling:** render PNGs from a trained SketchRNN:
+  ```bash
+  PYTHONPATH=. python lstm/sample_quickdraw.py \
+    --config configs/lstm/sample.py \
+    --config.checkpoint lstm/checkpoints/sketchrnn_epoch_010.pt
+  ```
+
+`diffusion/sampling.py` also exposes `tokens_to_gif`/`tokens_to_figure` if you want standalone visuals.
+
+## 6) Episode format
+Episode tokens are length `T × 7` with:
+
+| Channel | Meaning                              |
+|---------|--------------------------------------|
+| 0–1     | `dx, dy` deltas (or absolute x, y)   |
+| 2       | pen state (1 = draw, 0 = lift)       |
+| 3       | start flag                           |
+| 4       | separator flag between sketches      |
+| 5       | reset flag (between context/query)   |
+| 6       | stop flag                            |
+
+Sequence layout for K-shot episodes:
+```
+[SEP, prompt₁, SEP, ..., promptK, SEP, RESET, SEP, query, STOP]
+```
+Use `coordinate_mode="absolute"` (diffusion configs) or `"delta"` (LSTM configs).
+
+![Placeholder: episode layout](figures/placeholder_episode.png)
+![Placeholder: nearest-neighbour prompts](figures/placeholder_nearest_neighbours.png)
+
+## 7) Repository layout
+- `configs/` — ML-Collections configs for dataset, diffusion, LSTM, metrics.
+- `dataset/` — preprocessing, storage backends, episode builders, collators, rasterisation.
+- `diffusion/` — DiT-based policies, training/eval loops, sampling helpers.
+- `lstm/` — SketchRNN model, training, sampling.
+- `metrics/` — ResNet feature extractor, FID utilities, embedding + Faiss builders.
+- `scripts/` — dataset build/inspect and raster cache helpers.
 
 ## License & attribution
-
-- The Quick, Draw! dataset is © Google, released under the [Creative Commons Attribution 4.0 license](https://creativecommons.org/licenses/by/4.0/)—review their [terms](https://github.com/googlecreativelab/quickdraw-dataset#license) before redistribution.
-- The tooling in **Quick, Robot, Draw!** is provided under the same license as this repository (see `LICENSE`).
+- Quick, Draw! data © Google under CC BY 4.0 (see their license/terms).
+- Repository code is under the license in `LICENSE`.

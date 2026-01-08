@@ -93,5 +93,21 @@
                 "--config.wandb.use=False",
             ]
         },
+        {
+            "name": "Evaluate Encoder Decoder In-Context Imitation Learning Diffusion",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "diffusion/evaluate_encoder_decoder_in_context_imitation_learning.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "."
+            },
+            "args": [
+                "--config.checkpoint.name=8sgltbdu",
+                "--config.checkpoint.epoch=30",
+                "--config.data.root=data/all-classes/train-val-split/"
+            ]
+        }
     ]
 }

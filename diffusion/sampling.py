@@ -106,6 +106,55 @@ def sample_quickdraw_tokens_encoder_decoder(
 
 
 @torch.no_grad()
+def sample_quickdraw_tokens_encoder_decoder_from_partial_sketches(
+    policy: torch.nn.Module,
+    max_tokens: int,
+    demos: torch.Tensor,
+    *,
+    generator: Optional[torch.Generator] = None,
+) -> torch.Tensor:
+    """Autoregressively sample `total_tokens` conditioned on the growing context."""
+
+    device = next(policy.parameters()).device
+    feature_dim = policy.cfg.point_feature_dim
+
+    if demos["context"].shape[-1] != feature_dim:
+        raise ValueError(
+            f"start_token feature dim {demos['context'].shape[-1]} != {feature_dim}."
+        )
+
+    demos = {key: v.to(device) for key, v in demos.items()}
+
+    horizon = policy.cfg.horizon
+    max_chunks = math.ceil(max_tokens / horizon)
+    samples: list[torch.Tensor] = []
+
+    context = demos["context"]
+    context_mask = demos["context_mask"]
+    history = demos["history"]
+    history_mask = demos["query_mask"]
+
+    for _ in range(max_chunks):
+        actions = policy.sample_actions(
+            context=context,
+            context_mask=context_mask,
+            history=history,
+            history_mask=history_mask,
+            generator=generator,
+        )
+        samples.append(actions)
+
+        history = torch.cat([history, actions], dim=1)
+        history_mask = torch.cat(
+            [history_mask, torch.ones(actions.shape[:2]).to(device).bool()], dim=1
+        )
+
+    generated = torch.cat(samples, dim=1)
+    sketches = clean_sketches_encoder_decoder(generated)
+    return sketches
+
+
+@torch.no_grad()
 def sample_quickdraw_tokens_decoder_only(
     policy: torch.nn.Module,
     max_tokens: int,

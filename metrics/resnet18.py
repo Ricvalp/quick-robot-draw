@@ -9,6 +9,7 @@ from torchvision.models import resnet18
 
 __all__ = [
     "ResNet18FeatureExtractor",
+    "compute_fid",
 ]
 
 
@@ -30,6 +31,7 @@ class ResNet18FeatureExtractor(nn.Module):
 def compute_fid(
     generated_features: torch.Tensor,
     statistics_path: str = None,
+    gt_features: dict = None,
 ) -> float:
     """
     generated_images: Tensor of shape (N, 1, H, W)
@@ -40,11 +42,15 @@ def compute_fid(
     mu_gen = np.mean(generated_features, axis=0)
     sigma_gen = np.cov(generated_features, rowvar=False)
 
-    stats = np.load(statistics_path)
-    if stats is None:
+    if gt_features is not None:
+        mu_real = np.mean(gt_features, axis=0)
+        sigma_real = np.cov(gt_features, rowvar=False)
+    elif statistics_path is not None:
+        stats = np.load(statistics_path)
+        mu_real = stats["mu"]
+        sigma_real = stats["sigma"]
+    else:
         raise ValueError("Either statistics_path or statistics must be provided.")
-    mu_real = stats["mu"]
-    sigma_real = stats["sigma"]
 
     diff = mu_gen - mu_real
     covmean, _ = linalg.sqrtm(sigma_gen @ sigma_real, disp=False)
